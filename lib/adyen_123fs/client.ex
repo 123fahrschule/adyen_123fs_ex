@@ -55,6 +55,7 @@ defmodule Adyen123FS.Client do
           headers: [{"x-api-key", key}, {"accept", "application/json"}],
           retry: false,
           redirect: false,
+          decode_body: false,
           retry_log_level: false,
           receive_timeout: receive_timeout,
           connect_options: [timeout: connect_timeout]
@@ -68,33 +69,112 @@ defmodule Adyen123FS.Client do
   Make one request to a relative Checkout endpoint. Returns the full response
   on HTTP 2xx, including payment refusals. `{:ok, response}` does not mean paid.
   Request bodies use Adyen's JSON field names. Errors retain status and headers.
+  Options are `:idempotency_key` (1–64 printable ASCII characters) and `:query`
+  (map of query parameters). A key is never generated implicitly. Persist one
+  key per operation and reuse it with the identical body after a retryable error.
   """
   @spec request(t(), atom(), String.t(), map() | nil, keyword()) :: result()
   def request(client, method, path, body, options \\ []) do
-    if is_binary(path) and Regex.match?(~r{\A(?:/[A-Za-z0-9_-]+)+\z}, path) do
-      request_options = [method: method, url: client.base_url <> path] ++ options
+    with :ok <- validate_request(method, path, options),
+         {:ok, encoded_body} <- encode(body) do
+      key = Keyword.get(options, :idempotency_key)
+      safe_retry = method in [:get, :delete] or (method == :post and not is_nil(key))
+      headers = if key, do: [{"idempotency-key", key}], else: []
+      headers = if body, do: [{"content-type", "application/json"} | headers], else: headers
+
+      request_options = [
+        method: method,
+        url: client.base_url <> path,
+        body: encoded_body,
+        headers: headers
+      ]
 
       request_options =
-        if is_nil(body), do: request_options, else: Keyword.put(request_options, :json, body)
+        if Keyword.has_key?(options, :query),
+          do: Keyword.put(request_options, :params, options[:query]),
+          else: request_options
 
       case Req.request(client.request, request_options) do
-        {:ok, %Req.Response{status: status} = response} when status in 200..299 ->
-          {:ok, response}
-
         {:ok, response} ->
-          {:error,
-           %Error{
-             kind: :api,
-             status: response.status,
-             headers: response.headers,
-             body: response.body
-           }}
+          response_result(response, safe_retry)
 
         {:error, reason} ->
-          {:error, %Error{kind: :transport, reason: reason}}
+          {:error, %Error{kind: :transport, reason: reason, retryable: safe_retry}}
       end
-    else
-      {:error, %Error{kind: :validation, message: "invalid relative endpoint path"}}
+    end
+  end
+
+  defp validate_request(method, path, options) do
+    valid_options =
+      Keyword.keyword?(options) and
+        Enum.all?(Keyword.keys(options), &(&1 in [:idempotency_key, :query]))
+
+    cond do
+      method not in [:get, :post, :patch, :delete] ->
+        invalid("unsupported HTTP method")
+
+      not (is_binary(path) and Regex.match?(~r{\A(?:/[A-Za-z0-9_-]+)+\z}, path)) ->
+        invalid("invalid relative endpoint path")
+
+      not valid_options ->
+        invalid("unsupported request option")
+
+      Keyword.has_key?(options, :idempotency_key) and not valid_key?(options[:idempotency_key]) ->
+        invalid("invalid idempotency key")
+
+      not is_map(Keyword.get(options, :query, %{})) ->
+        invalid("query must be a map")
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc false
+  def valid_key?(key), do: is_binary(key) and Regex.match?(~r/\A[\x21-\x7e]{1,64}\z/, key)
+
+  defp encode(nil), do: {:ok, nil}
+
+  defp encode(body) when is_map(body) do
+    case Jason.encode(body) do
+      {:ok, json} -> {:ok, json}
+      {:error, _} -> invalid("body must be JSON encodable")
+    end
+  end
+
+  defp encode(_), do: invalid("body must be a map")
+  defp invalid(message), do: {:error, %Error{kind: :validation, message: message}}
+
+  defp response_result(response, safe_retry) do
+    decoded =
+      cond do
+        is_map(response.body) -> {:ok, response.body}
+        response.status == 204 and response.body in ["", nil] -> {:ok, nil}
+        is_binary(response.body) -> Jason.decode(response.body)
+        true -> :error
+      end
+
+    case {response.status in 200..299, decoded} do
+      {true, {:ok, body}} when is_map(body) or is_nil(body) ->
+        {:ok, %{response | body: body}}
+
+      {success, _} ->
+        body =
+          case decoded do
+            {:ok, value} -> value
+            _ -> response.body
+          end
+
+        {:error,
+         %Error{
+           kind: if(success, do: :protocol, else: :api),
+           status: response.status,
+           headers: response.headers,
+           body: body,
+           retryable:
+             not success and safe_retry and
+               Req.Response.get_header(response, "transient-error") == ["true"]
+         }}
     end
   end
 
