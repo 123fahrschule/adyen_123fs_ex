@@ -37,3 +37,31 @@ jobs:
         if: matrix.elixir == '1.19.5'
       - run: mix docs --warnings-as-errors
         if: matrix.elixir == '1.19.5'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: matrix.elixir == '1.19.5'
+        with:
+          path: _build/plts
+          key: plt-${{ runner.os }}-${{ runner.arch }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            plt-${{ runner.os }}-${{ runner.arch }}-${{ matrix.elixir }}-${{ matrix.otp }}-
+      - run: mix dialyzer --format github
+        if: matrix.elixir == '1.19.5'
+
+  without-plug:
+    runs-on: ubuntu-24.04
+    env:
+      MIX_ENV: prod
+    defaults:
+      run:
+        working-directory: integration/without_plug
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@0f75c29430f34bb5af4cce5e3b7f6a8860fca236 # v1
+        with:
+          elixir-version: '1.19.5'
+          otp-version: '28.3.3'
+      - run: mix deps.get --check-locked
+      - run: mix compile --warnings-as-errors
+      - run: mix run smoke.exs

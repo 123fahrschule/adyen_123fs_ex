@@ -8,6 +8,7 @@ MIX_ENV=test mix compile --warnings-as-errors
 mix test --warnings-as-errors --cover
 mix format --check-formatted
 mix docs --warnings-as-errors
+mix dialyzer
 ```
 
 For each behavior change, first add a failing test against the **public API**,
@@ -32,6 +33,18 @@ endpoint method/path, required parameters and asynchronous semantics whenever
 updating the API version. Keep Req current within the declared range and test
 the supported Elixir versions before changing that range. Do not add telemetry
 dependencies solely for optional dashboards or emit request bodies in telemetry.
+
+CI enforces a 90% coverage floor and runs Dialyzer on Elixir 1.19/OTP 28, caching
+its PLTs by runtime and dependency lockfile. Dialyzer supplements regression
+tests; broad map types cannot establish that every query value is encodable.
+
+The isolated consumer in `integration/without_plug` uses its own build/dependency
+directories and the root lockfile. Run `MIX_ENV=prod mix deps.get --check-locked`,
+then `MIX_ENV=prod mix run smoke.exs` from that directory to verify compilation,
+an offline Checkout call and HMAC verification without Plug. CI runs this too.
+`WebhookPlug` is conditionally compiled: after adding Plug to an existing
+consumer, run `mix deps.compile adyen_123fs_ex --force` in that consumer's target
+Mix environment to make the module available.
 
 Keep library code independent of RegistrationService and Charger. Service
 databases, business workflows, provider enablement and message queues belong to
