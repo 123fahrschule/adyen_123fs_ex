@@ -98,6 +98,85 @@ defmodule Adyen123FS.Checkout do
         options
       )
 
+  @doc """
+  POST `/payments/{paymentPspReference}/captures`: full or partial capture.
+  Requires amount and merchantAccount. `status: received` is an asynchronous
+  acknowledgement; process CAPTURE and CAPTURE_FAILED webhooks. The returned
+  pspReference belongs to the modification, not the original authorisation.
+  """
+  @spec capture(Client.t(), String.t(), map(), keyword()) :: Client.result()
+  def capture(client, psp_reference, body, options \\ []),
+    do: modify(client, psp_reference, "captures", body, ["amount", "merchantAccount"], options)
+
+  @doc "POST `/payments/{paymentPspReference}/refunds`: full/partial refund after capture. Requires amount and merchantAccount; outcome is asynchronous."
+  @spec refund(Client.t(), String.t(), map(), keyword()) :: Client.result()
+  def refund(client, psp_reference, body, options \\ []),
+    do: modify(client, psp_reference, "refunds", body, ["amount", "merchantAccount"], options)
+
+  @doc "POST `/payments/{paymentPspReference}/cancels`: cancel an uncaptured authorisation. Requires merchantAccount."
+  @spec cancel(Client.t(), String.t(), map(), keyword()) :: Client.result()
+  def cancel(client, psp_reference, body, options \\ []),
+    do: modify(client, psp_reference, "cancels", body, ["merchantAccount"], options)
+
+  @doc """
+  POST `/cancels`: cancel without the payment PSP reference. Requires
+  merchantAccount and **paymentReference** (the original merchant reference).
+  The optional reference identifies the cancellation, not the original payment.
+  """
+  @spec cancel_by_reference(Client.t(), map(), keyword()) :: Client.result()
+  def cancel_by_reference(client, body, options \\ []),
+    do: post(client, "/cancels", body, ["merchantAccount", "paymentReference"], options)
+
+  @doc "POST `/payments/{paymentPspReference}/reversals`: cancel or refund when capture state is unknown. Requires merchantAccount; outcome is asynchronous."
+  @spec reverse(Client.t(), String.t(), map(), keyword()) :: Client.result()
+  def reverse(client, psp_reference, body, options \\ []),
+    do: modify(client, psp_reference, "reversals", body, ["merchantAccount"], options)
+
+  @doc """
+  POST `/payments/{paymentPspReference}/amountUpdates`: adjust a pre-authorisation.
+  Requires amount and merchantAccount. Preserve adjustmentData and additionalData
+  when required by your authorisation-adjustment flow; scheme eligibility applies.
+  """
+  @spec update_amount(Client.t(), String.t(), map(), keyword()) :: Client.result()
+  def update_amount(client, psp_reference, body, options \\ []),
+    do:
+      modify(client, psp_reference, "amountUpdates", body, ["amount", "merchantAccount"], options)
+
+  @doc "GET `/storedPaymentMethods` for a merchantAccount and shopperReference. Both are required by this client to scope access explicitly."
+  @spec list_stored_payment_methods(Client.t(), map()) :: Client.result()
+  def list_stored_payment_methods(client, query) do
+    with :ok <- validate(query, ["merchantAccount", "shopperReference"]) do
+      Client.request(client, :get, "/storedPaymentMethods", nil, query: query)
+    end
+  end
+
+  @doc "POST `/storedPaymentMethods`: create a token with merchantAccount, shopperReference, recurringProcessingModel and paymentMethod. Obtain shopper consent first."
+  @spec store_payment_method(Client.t(), map(), keyword()) :: Client.result()
+  def store_payment_method(client, body, options \\ []),
+    do:
+      post(
+        client,
+        "/storedPaymentMethods",
+        body,
+        ["merchantAccount", "paymentMethod", "recurringProcessingModel", "shopperReference"],
+        options
+      )
+
+  @doc "DELETE `/storedPaymentMethods/{storedPaymentMethodId}`. Requires query merchantAccount and shopperReference. A successful deletion returns HTTP 204."
+  @spec delete_stored_payment_method(Client.t(), String.t(), map()) :: Client.result()
+  def delete_stored_payment_method(client, stored_id, query) do
+    with :ok <- identifier(stored_id),
+         :ok <- validate(query, ["merchantAccount", "shopperReference"]) do
+      Client.request(client, :delete, "/storedPaymentMethods/#{stored_id}", nil, query: query)
+    end
+  end
+
+  defp modify(client, psp_reference, suffix, body, required, options) do
+    with :ok <- identifier(psp_reference) do
+      post(client, "/payments/#{psp_reference}/#{suffix}", body, required, options)
+    end
+  end
+
   defp post(client, path, body, required, options) do
     with :ok <- validate(body, required), :ok <- idempotency(options) do
       Client.request(client, :post, path, body, options)
