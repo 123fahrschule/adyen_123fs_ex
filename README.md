@@ -3,6 +3,18 @@
 An Elixir client for Adyen Checkout, built on Req (the HTTP client included in
 Phoenix 1.8's generated applications). Independent of Phoenix, Ecto and Charger.
 
+For local integration in RegistrationService, add the sibling project to deps:
+
+```elixir
+{:adyen_123fs_ex, path: "../adyen_123fs_ex"}
+```
+
+For deployment, use the private Git repository and pin a reviewed commit with
+Mix's `git:` and `ref:` dependency options. This package is not published on Hex.
+Elixir 1.18+ is required. Req 0.7.4 is the minimum supported Req version. Plug is
+optional; Phoenix applications already provide it. No application supervisor,
+global API configuration or telemetry_metrics dependency is required.
+
 ## Configuration
 
 ```elixir
@@ -208,3 +220,9 @@ updating financial state. Preserve events for reconciliation and handle unknown
 event codes without crashing or inventing a successful payment state.
 
 Reference: [Adyen HMAC specification and public test vector](https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures/).
+
+For Phoenix, use `Adyen123FS.WebhookPlug` before `Plug.Parsers`. It acknowledges
+only after your durable inbox callback returns `:ok`. See the
+[webhook and RegistrationService integration guide](guides/webhooks.md) for
+runtime keys, database transactions, retries, event ordering and the Charger
+outbox/consumer contract.

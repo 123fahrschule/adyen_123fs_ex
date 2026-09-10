@@ -102,6 +102,20 @@ defmodule Adyen123FS.IdempotencyTest do
              Client.request(client, :post, "/payments", %{})
   end
 
+  test "inspecting an error cannot expose a response payload or a transport reason" do
+    error = %Adyen123FS.Error{
+      kind: :api,
+      status: 422,
+      body: %{"applePayToken" => "private-wallet-token"},
+      reason: "private-reason",
+      headers: %{"authorization" => ["private-header"]}
+    }
+
+    text = inspect(error)
+    assert text =~ "422"
+    refute text =~ "private-"
+  end
+
   test "serializes and decodes JSON without relying on response content type" do
     client =
       TestAdapter.client(fn req ->

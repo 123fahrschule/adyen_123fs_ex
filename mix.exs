@@ -11,7 +11,7 @@ defmodule Adyen123FS.MixProject do
       name: "Adyen123FS",
       description: "A Req-based Adyen Checkout client for Elixir",
       source_url: "https://github.com/123fahrschule/adyen_123fs_ex",
-      docs: [main: "readme", extras: ["README.md"]]
+      docs: [main: "readme", extras: ["README.md", "guides/webhooks.md"]]
     ]
   end
 
