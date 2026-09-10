@@ -9,14 +9,16 @@ defmodule Adyen123FS.Client do
   primarily for tests). No application-global configuration is read or changed.
 
   Requests never follow redirects or automatically retry. The caller owns the
-  durable operation and retry policy. Credentials are excluded from `Inspect`.
+  durable operation and retry policy. Client `Inspect` excludes the API key;
+  the stored Req template contains no credentials. The outgoing request must
+  contain the key, so never log it or directly inspect the `api_key` field.
   """
 
   alias Adyen123FS.Error
   @derive {Inspect, only: [:base_url]}
-  @enforce_keys [:base_url, :request]
-  defstruct [:base_url, :request]
-  @type t :: %__MODULE__{base_url: String.t(), request: Req.Request.t()}
+  @enforce_keys [:base_url, :api_key, :request]
+  defstruct [:base_url, :api_key, :request]
+  @type t :: %__MODULE__{base_url: String.t(), api_key: String.t(), request: Req.Request.t()}
   @type result :: {:ok, Req.Response.t()} | {:error, Error.t()}
 
   @doc "Build a client; invalid programmer configuration raises `ArgumentError`."
@@ -35,8 +37,8 @@ defmodule Adyen123FS.Client do
 
     key = Keyword.get(options, :api_key)
 
-    unless is_binary(key) and byte_size(key) > 0 and not String.contains?(key, ["\r", "\n"]),
-      do: raise(ArgumentError, "api_key must be a non-empty HTTP header value")
+    unless is_binary(key) and Regex.match?(~r/\A[\x21-\x7e]+\z/, key),
+      do: raise(ArgumentError, "api_key must contain printable ASCII without whitespace")
 
     version = positive_integer!(Keyword.get(options, :api_version, 72), :api_version)
 
@@ -51,7 +53,7 @@ defmodule Adyen123FS.Client do
     request =
       Req.new(
         [
-          headers: [{"x-api-key", key}, {"accept", "application/json"}],
+          headers: [{"accept", "application/json"}],
           retry: false,
           redirect: false,
           decode_body: false,
@@ -61,7 +63,7 @@ defmodule Adyen123FS.Client do
         ] ++ Keyword.take(options, [:adapter])
       )
 
-    %__MODULE__{base_url: base_url, request: request}
+    %__MODULE__{base_url: base_url, api_key: key, request: request}
   end
 
   @doc """
@@ -86,7 +88,7 @@ defmodule Adyen123FS.Client do
         method: method,
         url: client.base_url <> path,
         body: encoded_body,
-        headers: headers
+        headers: [{"x-api-key", client.api_key} | headers]
       ]
 
       request_options =

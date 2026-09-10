@@ -6,6 +6,25 @@ defmodule Adyen123FS.ClientTest do
     client = Client.new(api_key: "test-secret")
     assert client.base_url == "https://checkout-test.adyen.com/v72"
     refute inspect(client) =~ "test-secret"
+    refute inspect(client.request) =~ "test-secret"
+    refute inspect(%{client: client, request: client.request}, limit: :infinity) =~ "test-secret"
+    assert Req.Request.get_header(client.request, "x-api-key") == []
+  end
+
+  test "API keys reject whitespace and control characters without exposing their value" do
+    for key <- [
+          " secret",
+          "secret ",
+          "secret\t",
+          "sec ret",
+          "secret\n",
+          "secret\r",
+          "secret\0",
+          "secret\x7f"
+        ] do
+      error = assert_raise ArgumentError, fn -> Client.new(api_key: key) end
+      refute Exception.message(error) =~ "secret"
+    end
   end
 
   test "live endpoints require a merchant prefix" do
