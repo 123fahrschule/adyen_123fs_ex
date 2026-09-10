@@ -92,4 +92,56 @@ defmodule Adyen123FS.ClientTest do
       assert {:error, %{kind: :validation}} = Client.request(client, :post, path, %{})
     end
   end
+
+  test "invalid request inputs return validation errors before invoking the adapter" do
+    client = Adyen123FS.TestAdapter.client(fn _ -> flunk("must not send") end)
+
+    for {method, body, options} <- [
+          {:put, %{}, []},
+          {:head, %{}, []},
+          {:post, %{"pid" => self()}, []},
+          {:post, "not-a-map", []}
+        ] do
+      assert {:error, %{kind: :validation, retryable: false}} =
+               Client.request(client, method, "/payments", body, options)
+    end
+
+    for query <- [
+          "not-a-map",
+          ~D[2026-09-10],
+          %{:atom => "value"},
+          %{{1, 2} => "value"},
+          %{"a" => %{"b" => 1}},
+          %{"a" => [1, 2]},
+          %{"a" => {1, 2}}
+        ] do
+      assert {:error, %{kind: :validation, retryable: false}} =
+               Client.request(client, :get, "/storedPaymentMethods", nil, query: query)
+    end
+  end
+
+  test "scalar query values survive URL encoding" do
+    client =
+      Adyen123FS.TestAdapter.client(fn req ->
+        assert URI.decode_query(req.url.query) ==
+                 %{"string" => "ä+/=&", "integer" => "12", "boolean" => "false", "nil" => ""}
+
+        {req, Req.Response.new(status: 200, body: %{})}
+      end)
+
+    assert {:ok, _} =
+             Client.request(client, :get, "/storedPaymentMethods", nil,
+               query: %{"string" => "ä+/=&", "integer" => 12, "boolean" => false, "nil" => nil}
+             )
+  end
+
+  test "unsupported response body types return protocol errors" do
+    client =
+      Adyen123FS.TestAdapter.client(fn req ->
+        {req, Req.Response.new(status: 200, body: {:unexpected, :adapter_body})}
+      end)
+
+    assert {:error, %{kind: :protocol, retryable: false}} =
+             Client.request(client, :get, "/storedPaymentMethods", nil)
+  end
 end

@@ -147,4 +147,31 @@ defmodule Adyen123FS.CheckoutTest do
       {req, Req.Response.new(status: 200, body: %{})}
     end)
   end
+
+  test "stored method query extensions cannot crash listing or deletion" do
+    client = TestAdapter.client(fn _ -> flunk("must not send") end)
+
+    for extra <- [%{"nested" => 1}, [1, 2], {1, 2}] do
+      query = %{
+        "merchantAccount" => "Merchant",
+        "shopperReference" => "shopper",
+        "extra" => extra
+      }
+
+      assert {:error, %{kind: :validation}} = Checkout.list_stored_payment_methods(client, query)
+
+      assert {:error, %{kind: :validation}} =
+               Checkout.delete_stored_payment_method(client, "T1", query)
+    end
+  end
+
+  test "non-map bodies and incomplete amounts fail before network access" do
+    client = TestAdapter.client(fn _ -> flunk("must not send") end)
+    assert {:error, %{kind: :validation}} = Checkout.create_payment(client, "not-a-map", @key)
+
+    for amount <- [%{"value" => 1}, %{"currency" => "EUR"}] do
+      assert {:error, %{kind: :validation}} =
+               Checkout.create_session(client, Map.put(@payment, "amount", amount), @key)
+    end
+  end
 end

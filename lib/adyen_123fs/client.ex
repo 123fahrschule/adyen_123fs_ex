@@ -69,7 +69,8 @@ defmodule Adyen123FS.Client do
   on HTTP 2xx, including payment refusals. `{:ok, response}` does not mean paid.
   Request bodies use Adyen's JSON field names. Errors retain status and headers.
   Options are `:idempotency_key` (1–64 printable ASCII characters) and `:query`
-  (map of query parameters). A key is never generated implicitly. Persist one
+  (string-keyed map with string, integer, boolean or nil values).
+  A key is never generated implicitly. Persist one
   key per operation and reuse it with the identical body after a retryable error.
   """
   @spec request(t(), atom(), String.t(), map() | nil, keyword()) :: result()
@@ -121,8 +122,8 @@ defmodule Adyen123FS.Client do
       Keyword.has_key?(options, :idempotency_key) and not valid_key?(options[:idempotency_key]) ->
         invalid("invalid idempotency key")
 
-      not is_map(Keyword.get(options, :query, %{})) ->
-        invalid("query must be a map")
+      not valid_query?(Keyword.get(options, :query, %{})) ->
+        invalid("query must map string keys to string, integer, boolean or nil values")
 
       true ->
         :ok
@@ -130,7 +131,17 @@ defmodule Adyen123FS.Client do
   end
 
   @doc false
+  @spec valid_key?(term()) :: boolean()
   def valid_key?(key), do: is_binary(key) and Regex.match?(~r/\A[\x21-\x7e]{1,64}\z/, key)
+
+  defp valid_query?(query) when is_map(query) and not is_struct(query) do
+    Enum.all?(query, fn {key, value} ->
+      is_binary(key) and
+        (is_binary(value) or is_integer(value) or is_boolean(value) or is_nil(value))
+    end)
+  end
+
+  defp valid_query?(_), do: false
 
   defp encode(nil), do: {:ok, nil}
 
