@@ -154,8 +154,11 @@ defmodule Adyen123FS.Client do
       end
 
     case {response.status in 200..299, decoded} do
-      {true, {:ok, body}} when is_map(body) or is_nil(body) ->
+      {true, {:ok, body}} when is_map(body) ->
         {:ok, %{response | body: body}}
+
+      {true, {:ok, nil}} when response.status == 204 and response.body in ["", nil] ->
+        {:ok, %{response | body: nil}}
 
       {success, _} ->
         body =

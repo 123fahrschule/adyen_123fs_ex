@@ -87,6 +87,18 @@ defmodule Adyen123FS.IdempotencyTest do
              Client.request(client, :post, "/payments", %{})
   end
 
+  test "successful Checkout JSON must be an object, never null or a scalar" do
+    for body <- ["null", "true", "[]", ~s("text")] do
+      client =
+        TestAdapter.client(fn req ->
+          {req, Req.Response.new(status: 200, body: body)}
+        end)
+
+      assert {:error, %{kind: :protocol, status: 200}} =
+               Client.request(client, :post, "/payments", %{})
+    end
+  end
+
   test "non-JSON error responses retain status and headers" do
     client =
       TestAdapter.client(fn req ->

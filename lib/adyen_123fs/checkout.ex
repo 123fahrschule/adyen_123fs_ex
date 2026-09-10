@@ -39,7 +39,7 @@ defmodule Adyen123FS.Checkout do
     )
   end
 
-  @doc "POST `/payments/details`: complete 3DS or a redirect using details. paymentData is optional/fall-dependent."
+  @doc "POST `/payments/details`: complete 3DS or a redirect using details. paymentData is optional/flow-dependent."
   @spec submit_details(Client.t(), map(), keyword()) :: Client.result()
   def submit_details(client, body, options \\ []),
     do: post(client, "/payments/details", body, ["details"], options)
