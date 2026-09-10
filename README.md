@@ -174,6 +174,52 @@ The new signup domain still needs Adyen Allowed Origins and the applicable
 Apple Pay domain verification / Google Pay website approval. The SDK cannot
 enable payment methods or merchant capabilities in any provider account.
 
+## Pay by Link
+
+For a voucher purchase, parents can pay on an Adyen-hosted page:
+
+```elixir
+Checkout.create_payment_link(client, %{
+  "merchantAccount" => merchant_account,
+  "amount" => server_order_amount,
+  "reference" => server_order_reference,
+  "description" => "Driving lesson voucher",
+  "reusable" => false
+}, idempotency_key: persisted_link_operation_key)
+```
+
+The amount and reference come from the server-side order, never the browser.
+Keep the returned `url` out of logs and give it only to the intended recipient.
+HTTP 201 confirms link creation, not payment. Create the voucher code only after
+a successful, verified AUTHORISATION matched to the expected account, amount
+and purchase. With manual capture, wait for successful capture before making
+the voucher spendable. Issuance and redemption belong to the application's ledger.
+
+`Checkout.get_payment_link(client, link_id)` retrieves the link;
+`Checkout.expire_payment_link(client, link_id)` expires it. Expiration does not
+refund an existing payment. That PATCH has no idempotency key support and its
+transport errors are not automatically retryable.
+
+`expiresAt` defaults to 24 hours at Adyen. Other fields such as shopperEmail,
+countryCode, allowedPaymentMethods, lineItems and manualCapture are passed through.
+`reusable: true` permits multiple payments, so avoid it for a single purchase.
+See [Pay by Link](https://docs.adyen.com/unified-commerce/pay-by-link/payment-links/api).
+
+## Deliberate API boundaries
+
+This client covers 20 of the pinned Checkout v72 specification's 28 active
+operations. It excludes `/orders`, `/orders/cancel`, `/paymentMethods/balance`
+(external gift cards and partial-payment orchestration), `/donations`,
+`/donationCampaigns`, `/paypal/updateOrder`, `/validateShopperId` and `/forward`,
+as well as the deprecated `/originKeys` endpoint.
+
+Own driving-school vouchers are a RegistrationService ledger, not an Adyen
+endpoint. Their purchase uses an ordinary payment or payment link; redemption
+reduces the order's payable amount before the Adyen call. External stored-value
+card operations would use the separately enabled `StoredValueService-v46`,
+which has its own host and is outside this wrapper. No service integration or
+voucher ledger is implemented here.
+
 ## Reserve, confirm the order, capture
 
 For your registration checkout, create the payment with:

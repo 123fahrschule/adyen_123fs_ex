@@ -43,6 +43,48 @@ defmodule Adyen123FS.Checkout do
   end
 
   @doc """
+  POST `/paymentLinks`: create a hosted payment link. Requires amount,
+  merchantAccount and reference, plus a persisted idempotency key in options.
+  Take amount and reference from the server-side order, never from the browser.
+
+  Optional fields are forwarded unchanged, including expiresAt (Adyen defaults
+  to 24 hours), shopperEmail, description, countryCode, reusable,
+  allowedPaymentMethods, blockedPaymentMethods, lineItems, manualCapture,
+  storePaymentMethodMode, recurringProcessingModel and shopperReference.
+  `reusable: true` permits multiple payments on the same link and is normally
+  inappropriate for a single shopper's purchase. The returned url is a payment
+  page: do not log it and share it only with the intended recipient.
+
+  HTTP 201 means the link exists, not that it is paid. Process the payment's
+  AUTHORISATION webhook to determine its outcome.
+  """
+  @spec create_payment_link(Client.t(), map(), keyword()) :: Client.result()
+  def create_payment_link(client, body, options),
+    do: post(client, "/paymentLinks", body, ["amount", "merchantAccount", "reference"], options)
+
+  @doc "GET `/paymentLinks/{linkId}`: retrieve a link. Payment outcomes still require verified webhooks."
+  @spec get_payment_link(Client.t(), String.t()) :: Client.result()
+  def get_payment_link(client, link_id) do
+    with :ok <- identifier(link_id) do
+      Client.request(client, :get, "/paymentLinks/#{link_id}", nil)
+    end
+  end
+
+  @doc """
+  PATCH `/paymentLinks/{linkId}`: expire a link with the fixed body
+  `%{\"status\" => \"expired\"}`. Expired is the only request status allowed by v72.
+  Adyen declares no idempotency key for this PATCH; none is sent and uncertain
+  transport failures are not marked retryable. This does not cancel or refund
+  a payment already made through the link.
+  """
+  @spec expire_payment_link(Client.t(), String.t()) :: Client.result()
+  def expire_payment_link(client, link_id) do
+    with :ok <- identifier(link_id) do
+      Client.request(client, :patch, "/paymentLinks/#{link_id}", %{"status" => "expired"})
+    end
+  end
+
+  @doc """
   POST `/payments`: initiate a card, wallet, Alma, or stored-method payment.
   Requires amount, merchantAccount, paymentMethod, reference, returnUrl.
   `paymentMethod` comes from Adyen Web (types scheme/applepay/googlepay/alma).

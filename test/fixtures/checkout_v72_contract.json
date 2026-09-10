@@ -4,6 +4,16 @@
   "revision": "f82d1fe674e536cc2c6b0d7946e0e827873a4fbf",
   "checked_at": "2026-09-10",
   "operations": {
+    "POST /paymentLinks": {
+      "required_body": {"amount": "object", "merchantAccount": "string", "reference": "string"},
+      "required_query": []
+    },
+    "GET /paymentLinks/{linkId}": {"required_body": {}, "required_query": []},
+    "PATCH /paymentLinks/{linkId}": {
+      "required_body": {"status": "string"},
+      "required_query": [],
+      "body_enums": {"status": ["expired"]}
+    },
     "POST /cardDetails": {
       "required_body": {"merchantAccount": "string"},
       "required_query": []

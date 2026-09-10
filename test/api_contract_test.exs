@@ -7,6 +7,9 @@ defmodule Adyen123FS.APIContractTest do
   @operations [
     {:payment_methods, "POST /paymentMethods", :body_optional_key},
     {:card_details, "POST /cardDetails", :body_optional_key},
+    {:create_payment_link, "POST /paymentLinks", :body},
+    {:get_payment_link, "GET /paymentLinks/{linkId}", :resource},
+    {:expire_payment_link, "PATCH /paymentLinks/{linkId}", :expire_link},
     {:create_payment, "POST /payments", :body},
     {:submit_details, "POST /payments/details", :body},
     {:create_session, "POST /sessions", :body},
@@ -45,6 +48,11 @@ defmodule Adyen123FS.APIContractTest do
           if @kind == :body_optional_key,
             do: assert(Req.Request.get_header(request, "idempotency-key") == [])
 
+          if @kind == :expire_link do
+            assert Req.Request.get_header(request, "idempotency-key") == []
+            assert @specification["body_enums"]["status"] == [body["status"]]
+          end
+
           query = URI.decode_query(request.url.query || "")
           for key <- @specification["required_query"], do: assert(Map.has_key?(query, key))
           {request, Req.Response.new(status: 200, body: %{})}
@@ -76,6 +84,7 @@ defmodule Adyen123FS.APIContractTest do
       {"amount", _} -> {"amount", %{"currency" => "EUR", "value" => 1000}}
       {"paymentMethod", _} -> {"paymentMethod", %{"type" => "scheme"}}
       {"details", _} -> {"details", %{"redirectResult" => "opaque"}}
+      {"status", _} -> {"status", "expired"}
       {key, _} -> {key, "test-value"}
     end)
   end
@@ -110,6 +119,79 @@ defmodule Adyen123FS.APIContractTest do
 
   defp invoke(client, function, :body_optional_key, body),
     do: apply(Checkout, function, [client, body])
+
+  defp invoke(client, function, kind, _) when kind in [:resource, :expire_link],
+    do: apply(Checkout, function, [client, "RESOURCE123"])
+
+  test "payment links preserve options and return a link rather than a payment outcome" do
+    body = %{
+      "amount" => %{"currency" => "EUR", "value" => 10000},
+      "merchantAccount" => "Merchant",
+      "reference" => "voucher-purchase",
+      "expiresAt" => "2026-09-11T12:00:00Z",
+      "shopperEmail" => "parent@example.com",
+      "description" => "Driving lesson voucher",
+      "countryCode" => "DE",
+      "reusable" => false,
+      "allowedPaymentMethods" => ["scheme"],
+      "blockedPaymentMethods" => ["ideal"],
+      "lineItems" => [%{"id" => "voucher"}],
+      "manualCapture" => true,
+      "storePaymentMethodMode" => "disabled",
+      "recurringProcessingModel" => "CardOnFile",
+      "shopperReference" => "shopper-1"
+    }
+
+    response = %{
+      "id" => "LINK123",
+      "url" => "https://checkoutshopper-test.adyen.com/test-link",
+      "status" => "active"
+    }
+
+    client =
+      TestAdapter.client(fn req ->
+        assert Jason.decode!(req.body) == body
+        assert Req.Request.get_header(req, "idempotency-key") == ["link-operation"]
+        {req, Req.Response.new(status: 201, body: response)}
+      end)
+
+    assert {:ok, %{status: 201, body: ^response}} =
+             apply(Checkout, :create_payment_link, [
+               client,
+               body,
+               [idempotency_key: "link-operation"]
+             ])
+
+    client = TestAdapter.client(fn _ -> flunk("must not send") end)
+
+    assert {:error, %{kind: :validation}} =
+             apply(Checkout, :create_payment_link, [client, body, []])
+
+    refute function_exported?(Checkout, :create_payment_link, 2)
+  end
+
+  test "link retrieval and expiration reject unsafe or oversized identifiers" do
+    client = TestAdapter.client(fn _ -> flunk("must not send") end)
+
+    for function <- [:get_payment_link, :expire_payment_link],
+        id <- [nil, "", "../payments", "LINK?status=paid", String.duplicate("x", 1025)] do
+      assert {:error, %{kind: :validation}} = apply(Checkout, function, [client, id])
+    end
+  end
+
+  test "link expiration has a fixed body and never marks an uncertain PATCH retryable" do
+    client =
+      TestAdapter.client(fn req ->
+        assert req.method == :patch
+        assert req.url.path == "/v72/paymentLinks/LINK123"
+        assert Jason.decode!(req.body) == %{"status" => "expired"}
+        assert Req.Request.get_header(req, "idempotency-key") == []
+        {req, %Req.TransportError{reason: :timeout}}
+      end)
+
+    assert {:error, %{kind: :transport, retryable: false}} =
+             apply(Checkout, :expire_payment_link, [client, "LINK123"])
+  end
 
   defp invoke(client, function, :body, body),
     do: apply(Checkout, function, [client, body, [idempotency_key: "operation"]])
