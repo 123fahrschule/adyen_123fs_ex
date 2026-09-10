@@ -15,7 +15,13 @@ defmodule Adyen123FS.MixProject do
       source_url: "https://github.com/123fahrschule/adyen_123fs_ex",
       docs: [
         main: "readme",
-        extras: ["README.md", "guides/webhooks.md", "guides/acceptance.md", "CONTRIBUTING.md"]
+        extras: [
+          "README.md",
+          "guides/webhooks.md",
+          "guides/acceptance.md",
+          "guides/data_protection.md",
+          "CONTRIBUTING.md"
+        ]
       ]
     ]
   end

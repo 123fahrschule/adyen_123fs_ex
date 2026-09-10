@@ -33,6 +33,36 @@ defmodule Adyen123FS.ClientTest do
     assert client.base_url == "https://1797-acme-checkout-live.adyenpayments.com/checkout/v72"
   end
 
+  test "service determines the API host and default version without sharing Checkout prefixes" do
+    assert Map.get(Client.new(api_key: "test-secret"), :service) == :checkout
+
+    for {environment, domain} <- [test: "ca-test", live: "ca-live"] do
+      client =
+        Client.new(api_key: "test-secret", service: :data_protection, environment: environment)
+
+      assert client.service == :data_protection
+      assert client.base_url == "https://#{domain}.adyen.com/ca/services/DataProtectionService/v1"
+      refute inspect(client) =~ "test-secret"
+      refute inspect(client.request) =~ "test-secret"
+      assert inspect(client) =~ "data_protection"
+    end
+
+    client = Client.new(api_key: "key", service: :data_protection, api_version: 2)
+    assert client.base_url == "https://ca-test.adyen.com/ca/services/DataProtectionService/v2"
+  end
+
+  test "unsupported services and irrelevant prefixes fail as programmer configuration" do
+    for options <- [
+          [service: :unknown],
+          [service: nil],
+          [service: "checkout"],
+          [service: :data_protection, live_prefix: "company"],
+          [service: :data_protection, environment: :live, live_prefix: nil]
+        ] do
+      assert_raise ArgumentError, fn -> Client.new([api_key: "key"] ++ options) end
+    end
+  end
+
   test "rejects invalid configuration without exposing secrets" do
     for options <- [
           [],

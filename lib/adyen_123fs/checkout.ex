@@ -20,7 +20,8 @@ defmodule Adyen123FS.Checkout do
   @doc "POST `/paymentMethods`: discover enabled methods for the amount and country. Requires merchantAccount."
   @spec payment_methods(Client.t(), map(), keyword()) :: Client.result()
   def payment_methods(client, body, options \\ []) do
-    with :ok <- validate(body, ["merchantAccount"]) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- validate(body, ["merchantAccount"]) do
       Client.request(client, :post, "/paymentMethods", body, options)
     end
   end
@@ -37,7 +38,8 @@ defmodule Adyen123FS.Checkout do
   """
   @spec card_details(Client.t(), map(), keyword()) :: Client.result()
   def card_details(client, body, options \\ []) do
-    with :ok <- validate(body, ["merchantAccount"]) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- validate(body, ["merchantAccount"]) do
       Client.request(client, :post, "/cardDetails", body, options)
     end
   end
@@ -65,7 +67,8 @@ defmodule Adyen123FS.Checkout do
   @doc "GET `/paymentLinks/{linkId}`: retrieve a link. Payment outcomes still require verified webhooks."
   @spec get_payment_link(Client.t(), String.t()) :: Client.result()
   def get_payment_link(client, link_id) do
-    with :ok <- identifier(link_id) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(link_id) do
       Client.request(client, :get, "/paymentLinks/#{link_id}", nil)
     end
   end
@@ -79,7 +82,8 @@ defmodule Adyen123FS.Checkout do
   """
   @spec expire_payment_link(Client.t(), String.t()) :: Client.result()
   def expire_payment_link(client, link_id) do
-    with :ok <- identifier(link_id) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(link_id) do
       Client.request(client, :patch, "/paymentLinks/#{link_id}", %{"status" => "expired"})
     end
   end
@@ -124,7 +128,8 @@ defmodule Adyen123FS.Checkout do
   """
   @spec get_session(Client.t(), String.t(), String.t()) :: Client.result()
   def get_session(client, session_id, session_result) do
-    with :ok <- identifier(session_id),
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(session_id),
          :ok <- require_string(session_result, "sessionResult") do
       Client.request(client, :get, "/sessions/#{session_id}", nil,
         query: %{"sessionResult" => session_result}
@@ -139,7 +144,9 @@ defmodule Adyen123FS.Checkout do
   """
   @spec update_session(Client.t(), String.t(), map()) :: Client.result()
   def update_session(client, session_id, body) do
-    with :ok <- identifier(session_id), :ok <- validate(body, ["amount", "sessionData"]) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(session_id),
+         :ok <- validate(body, ["amount", "sessionData"]) do
       Client.request(client, :patch, "/sessions/#{session_id}", body)
     end
   end
@@ -207,7 +214,8 @@ defmodule Adyen123FS.Checkout do
   @doc "GET `/storedPaymentMethods` for a merchantAccount and shopperReference. Both are required by this client to scope access explicitly."
   @spec list_stored_payment_methods(Client.t(), map()) :: Client.result()
   def list_stored_payment_methods(client, query) do
-    with :ok <- validate(query, ["merchantAccount", "shopperReference"]) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- validate(query, ["merchantAccount", "shopperReference"]) do
       Client.request(client, :get, "/storedPaymentMethods", nil, query: query)
     end
   end
@@ -227,20 +235,24 @@ defmodule Adyen123FS.Checkout do
   @doc "DELETE `/storedPaymentMethods/{storedPaymentMethodId}`. Requires query merchantAccount and shopperReference. A successful deletion returns HTTP 204."
   @spec delete_stored_payment_method(Client.t(), String.t(), map()) :: Client.result()
   def delete_stored_payment_method(client, stored_id, query) do
-    with :ok <- identifier(stored_id),
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(stored_id),
          :ok <- validate(query, ["merchantAccount", "shopperReference"]) do
       Client.request(client, :delete, "/storedPaymentMethods/#{stored_id}", nil, query: query)
     end
   end
 
   defp modify(client, psp_reference, suffix, body, required, options) do
-    with :ok <- identifier(psp_reference) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- identifier(psp_reference) do
       post(client, "/payments/#{psp_reference}/#{suffix}", body, required, options)
     end
   end
 
   defp post(client, path, body, required, options) do
-    with :ok <- validate(body, required), :ok <- idempotency(options) do
+    with :ok <- Client.ensure_service(client, :checkout),
+         :ok <- validate(body, required),
+         :ok <- idempotency(options) do
       Client.request(client, :post, path, body, options)
     end
   end

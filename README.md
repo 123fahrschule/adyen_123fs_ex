@@ -36,6 +36,14 @@ Requests return `{:ok, %Req.Response{}}` or `{:error, %Adyen123FS.Error{}}`.
 HTTP success is distinct from payment success; inspect `resultCode` and process
 verified webhooks. Redirects and automatic HTTP retries are disabled.
 
+For payment-scoped shopper erasure, construct a separate client with
+`service: :data_protection`. It uses Data Protection v1 on Adyen's Customer Area
+host, rejects `live_prefix` and idempotency keys, and cannot be used for Checkout.
+`DataProtection.request_subject_erasure/2` returns the provider's result unchanged;
+even `SUCCESS` means accepted for asynchronous processing, not completed deletion.
+See the [Data Protection guide](guides/data_protection.md) for results, recurring
+tokens and the relationship to your own retention/deletion process.
+
 ## Idempotency and errors
 
 Generate `Adyen123FS.idempotency_key()` once and persist it with the operation

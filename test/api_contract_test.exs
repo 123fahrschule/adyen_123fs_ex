@@ -1,6 +1,6 @@
 defmodule Adyen123FS.APIContractTest do
   use ExUnit.Case, async: true
-  alias Adyen123FS.{Checkout, TestAdapter}
+  alias Adyen123FS.{Checkout, Client, TestAdapter}
 
   @contract File.read!(Path.join(__DIR__, "fixtures/checkout_v72_contract.json"))
             |> Jason.decode!()
@@ -33,6 +33,16 @@ defmodule Adyen123FS.APIContractTest do
     @operation operation
     @kind kind
     @specification @contract["operations"][operation]
+
+    test "#{function} rejects a Data Protection client before network access" do
+      TestAdapter.client(fn _ -> flunk("wrong service must not reach Adyen") end)
+      client = Client.new(api_key: "key", service: :data_protection, adapter: TestAdapter)
+      body = sample_body(@specification["required_body"])
+
+      assert {:error,
+              %{kind: :validation, message: "client is configured for a different Adyen service"}} =
+               invoke(client, @function, @kind, body)
+    end
 
     test "#{function} obeys the pinned Adyen v72 method, path and required field contract" do
       body = sample_body(@specification["required_body"])

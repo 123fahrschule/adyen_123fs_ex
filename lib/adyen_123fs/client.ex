@@ -1,9 +1,11 @@
 defmodule Adyen123FS.Client do
   @moduledoc """
-  Explicit, immutable configuration and transport for Adyen Checkout API v72.
+  Explicit, immutable configuration and transport for Adyen services.
 
   `new/1` requires `:api_key`. Optional settings: `:environment` (`:test` or
-  `:live`), `:live_prefix` (required in live), `:api_version` (integer),
+  `:live`), `:service` (`:checkout`, the default, or `:data_protection`),
+  `:live_prefix` (required for live Checkout; forbidden for Data Protection),
+  `:api_version` (integer, default 72 for Checkout or 1 for Data Protection),
   `:receive_timeout` (milliseconds, default
   30_000), `:connect_timeout` (default 10_000), and `:adapter` (Req adapter,
   primarily for tests). No application-global configuration is read or changed.
@@ -11,16 +13,23 @@ defmodule Adyen123FS.Client do
   Requests never follow redirects or automatically retry. The caller owns the
   durable retry policy; all POST transport failures without an idempotency key
   are conservatively marked non-retryable, including `/paymentMethods`.
+  Data Protection requests never support idempotency keys or automatic retries.
   Client `Inspect` excludes the API key;
   the stored Req template contains no credentials. The outgoing request must
   contain the key, so never log it or directly inspect the `api_key` field.
   """
 
   alias Adyen123FS.Error
-  @derive {Inspect, only: [:base_url]}
-  @enforce_keys [:base_url, :api_key, :request]
-  defstruct [:base_url, :api_key, :request]
-  @type t :: %__MODULE__{base_url: String.t(), api_key: String.t(), request: Req.Request.t()}
+  @derive {Inspect, only: [:base_url, :service]}
+  @enforce_keys [:base_url, :service, :api_key, :request]
+  defstruct [:base_url, :service, :api_key, :request]
+  @type service :: :checkout | :data_protection
+  @type t :: %__MODULE__{
+          base_url: String.t(),
+          service: service(),
+          api_key: String.t(),
+          request: Req.Request.t()
+        }
   @type result :: {:ok, Req.Response.t()} | {:error, Error.t()}
 
   @doc "Build a client; invalid programmer configuration raises `ArgumentError`."
@@ -29,6 +38,7 @@ defmodule Adyen123FS.Client do
     options =
       Keyword.validate!(options, [
         :api_key,
+        :service,
         :environment,
         :live_prefix,
         :api_version,
@@ -42,7 +52,19 @@ defmodule Adyen123FS.Client do
     unless is_binary(key) and Regex.match?(~r/\A[\x21-\x7e]+\z/, key),
       do: raise(ArgumentError, "api_key must contain printable ASCII without whitespace")
 
-    version = positive_integer!(Keyword.get(options, :api_version, 72), :api_version)
+    service = Keyword.get(options, :service, :checkout)
+
+    default_version =
+      case service do
+        :checkout -> 72
+        :data_protection -> 1
+        _ -> raise ArgumentError, "service must be :checkout or :data_protection"
+      end
+
+    if service == :data_protection and Keyword.has_key?(options, :live_prefix),
+      do: raise(ArgumentError, "live_prefix is not supported by Data Protection")
+
+    version = positive_integer!(Keyword.get(options, :api_version, default_version), :api_version)
 
     receive_timeout =
       positive_integer!(Keyword.get(options, :receive_timeout, 30_000), :receive_timeout)
@@ -50,7 +72,7 @@ defmodule Adyen123FS.Client do
     connect_timeout =
       positive_integer!(Keyword.get(options, :connect_timeout, 10_000), :connect_timeout)
 
-    base_url = base_url(options, version)
+    base_url = base_url(service, options, version)
 
     request =
       Req.new(
@@ -65,24 +87,29 @@ defmodule Adyen123FS.Client do
         ] ++ Keyword.take(options, [:adapter])
       )
 
-    %__MODULE__{base_url: base_url, api_key: key, request: request}
+    %__MODULE__{base_url: base_url, service: service, api_key: key, request: request}
   end
 
   @doc """
-  Make one request to a relative Checkout endpoint. Returns the full response
+  Make one request to a relative endpoint of the configured service. Returns the full response
   on HTTP 2xx, including payment refusals. `{:ok, response}` does not mean paid.
   Request bodies use Adyen's JSON field names. Errors retain status and headers.
   Options are `:idempotency_key` (1–64 printable ASCII characters) and `:query`
   (string-keyed map with string, integer, boolean or nil values).
   A key is never generated implicitly. Persist one
   key per operation and reuse it with the identical body after a retryable error.
+  Data Protection rejects `:idempotency_key` and never marks errors retryable.
   """
   @spec request(t(), atom(), String.t(), map() | nil, keyword()) :: result()
   def request(client, method, path, body, options \\ []) do
-    with :ok <- validate_request(method, path, options),
+    with :ok <- validate_request(client, method, path, options),
          {:ok, encoded_body} <- encode(body) do
       key = Keyword.get(options, :idempotency_key)
-      safe_retry = method in [:get, :delete] or (method == :post and not is_nil(key))
+
+      safe_retry =
+        client.service == :checkout and
+          (method in [:get, :delete] or (method == :post and not is_nil(key)))
+
       headers = if key, do: [{"idempotency-key", key}], else: []
       headers = if body, do: [{"content-type", "application/json"} | headers], else: headers
 
@@ -109,7 +136,12 @@ defmodule Adyen123FS.Client do
     end
   end
 
-  defp validate_request(method, path, options) do
+  @doc false
+  @spec ensure_service(t(), service()) :: :ok | {:error, Error.t()}
+  def ensure_service(%__MODULE__{service: service}, service), do: :ok
+  def ensure_service(_, _), do: invalid("client is configured for a different Adyen service")
+
+  defp validate_request(client, method, path, options) do
     valid_options =
       Keyword.keyword?(options) and
         Enum.all?(Keyword.keys(options), &(&1 in [:idempotency_key, :query]))
@@ -123,6 +155,9 @@ defmodule Adyen123FS.Client do
 
       not valid_options ->
         invalid("unsupported request option")
+
+      client.service == :data_protection and Keyword.has_key?(options, :idempotency_key) ->
+        invalid("Data Protection does not support idempotency keys")
 
       Keyword.has_key?(options, :idempotency_key) and not valid_key?(options[:idempotency_key]) ->
         invalid("invalid idempotency key")
@@ -196,7 +231,18 @@ defmodule Adyen123FS.Client do
     end
   end
 
-  defp base_url(options, version) do
+  defp base_url(:data_protection, options, version) do
+    host =
+      case Keyword.get(options, :environment, :test) do
+        :test -> "ca-test.adyen.com"
+        :live -> "ca-live.adyen.com"
+        _ -> raise ArgumentError, "environment must be :test or :live"
+      end
+
+    "https://#{host}/ca/services/DataProtectionService/v#{version}"
+  end
+
+  defp base_url(:checkout, options, version) do
     case Keyword.get(options, :environment, :test) do
       :test ->
         "https://checkout-test.adyen.com/v#{version}"
