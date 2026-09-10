@@ -137,12 +137,14 @@ enable payment methods or merchant capabilities in any provider account.
 For your registration checkout, create the payment with:
 
 ```elixir
-params = Map.put(params, "additionalData", %{"manualCapture" => "true"})
+params = Map.update(params, "additionalData", %{"manualCapture" => "true"}, fn data ->
+  Map.put(data, "manualCapture", "true")
+end)
 Checkout.create_payment(client, params, idempotency_key: payment_operation_key)
 ```
 
-Merge this into existing additionalData when other fields are present. This
-per-payment setting also works with `/sessions` and overrides the merchant's
+This preserves existing additionalData fields. The per-payment setting also
+works with `/sessions` and overrides the merchant's
 global capture setting. `captureDelayHours` schedules automatic capture; it is
 not the manual-capture setting. `authorisationType: PreAuth` is for adjustable
 authorisations, not a replacement for manual capture.
@@ -184,3 +186,25 @@ Sources: [capture](https://docs.adyen.com/online-payments/capture/),
 [refund](https://docs.adyen.com/online-payments/refund/),
 [Alma capabilities](https://docs.adyen.com/payment-methods/alma/),
 [tokenization](https://docs.adyen.com/online-payments/tokenization/).
+
+## Webhook signatures
+
+Use `Adyen123FS.Webhook.verify_standard_request(payload, hmac_keys)` to verify
+every item in a decoded Standard webhook batch. It returns `{:ok, items}` only
+when all signatures are valid. Use `verify_standard/2` for one item. During key
+rotation, pass `[current_key, previous_key]`; keys belong to the webhook endpoint
+and environment, independently of the Checkout API key.
+
+For header-signed events such as recurring token lifecycle webhooks, require the
+`protocol: HmacSHA256` header and use `verify_body(raw_body, signature, keys)`.
+Read `hmacsignature` case-insensitively and verify the original bytes before JSON
+decoding. These events do not use Standard notification canonicalization.
+
+The Standard HMAC authenticates the eight documented fields only. Do not treat
+extra additionalData or eventDate as signed financial instructions. Validate
+merchant routing against merchantAccountCode and your expected local operation.
+Use the signed amount/currency, references, eventCode and success fields when
+updating financial state. Preserve events for reconciliation and handle unknown
+event codes without crashing or inventing a successful payment state.
+
+Reference: [Adyen HMAC specification and public test vector](https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures/).

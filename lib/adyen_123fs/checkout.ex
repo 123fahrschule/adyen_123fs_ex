@@ -134,7 +134,7 @@ defmodule Adyen123FS.Checkout do
 
   @doc """
   POST `/payments/{paymentPspReference}/amountUpdates`: adjust a pre-authorisation.
-  Requires amount and merchantAccount. Preserve adjustmentData and additionalData
+  Requires amount and merchantAccount. Preserve adjustAuthorisationData and additionalData
   when required by your authorisation-adjustment flow; scheme eligibility applies.
   """
   @spec update_amount(Client.t(), String.t(), map(), keyword()) :: Client.result()
