@@ -3,8 +3,8 @@ defmodule Adyen123FS.Client do
   Explicit, immutable configuration and transport for Adyen Checkout API v72.
 
   `new/1` requires `:api_key`. Optional settings: `:environment` (`:test` or
-  `:live`), `:live_prefix` (required in live), `:region` (`:eu`, `:us`, `:au`,
-  `:in`), `:api_version` (integer), `:receive_timeout` (milliseconds, default
+  `:live`), `:live_prefix` (required in live), `:api_version` (integer),
+  `:receive_timeout` (milliseconds, default
   30_000), `:connect_timeout` (default 10_000), and `:adapter` (Req adapter,
   primarily for tests). No application-global configuration is read or changed.
 
@@ -27,7 +27,6 @@ defmodule Adyen123FS.Client do
         :api_key,
         :environment,
         :live_prefix,
-        :region,
         :api_version,
         :receive_timeout,
         :connect_timeout,
@@ -179,9 +178,6 @@ defmodule Adyen123FS.Client do
   end
 
   defp base_url(options, version) do
-    region = Keyword.get(options, :region, :eu)
-    unless region in [:eu, :us, :au, :in], do: raise(ArgumentError, "invalid region")
-
     case Keyword.get(options, :environment, :test) do
       :test ->
         "https://checkout-test.adyen.com/v#{version}"
@@ -192,8 +188,7 @@ defmodule Adyen123FS.Client do
         unless is_binary(prefix) and Regex.match?(~r/\A[A-Za-z0-9][A-Za-z0-9-]*\z/, prefix),
           do: raise(ArgumentError, "live_prefix is required and must be a hostname prefix")
 
-        suffix = if region == :eu, do: "", else: "-#{region}"
-        "https://#{prefix}-checkout-live#{suffix}.adyenpayments.com/checkout/v#{version}"
+        "https://#{prefix}-checkout-live.adyenpayments.com/checkout/v#{version}"
 
       _ ->
         raise ArgumentError, "environment must be :test or :live"

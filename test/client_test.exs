@@ -27,9 +27,10 @@ defmodule Adyen123FS.ClientTest do
     end
   end
 
-  test "regional live endpoints are explicit" do
-    client = Client.new(api_key: "key", environment: :live, live_prefix: "acme", region: :us)
-    assert client.base_url == "https://acme-checkout-live-us.adyenpayments.com/checkout/v72"
+  test "rejects unsupported region options instead of inventing a Checkout hostname" do
+    assert_raise ArgumentError, fn ->
+      Client.new(api_key: "key", environment: :live, live_prefix: "acme", region: :us)
+    end
   end
 
   test "requests send JSON and API credentials with retries and redirects disabled" do

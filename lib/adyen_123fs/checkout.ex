@@ -134,8 +134,8 @@ defmodule Adyen123FS.Checkout do
 
   @doc """
   POST `/payments/{paymentPspReference}/amountUpdates`: adjust a pre-authorisation.
-  Requires amount and merchantAccount. Preserve adjustAuthorisationData and additionalData
-  when required by your authorisation-adjustment flow; scheme eligibility applies.
+  Requires amount and merchantAccount. Preserve adjustAuthorisationData when
+  required by your authorisation-adjustment flow; scheme eligibility applies.
   """
   @spec update_amount(Client.t(), String.t(), map(), keyword()) :: Client.result()
   def update_amount(client, psp_reference, body, options \\ []),
@@ -188,7 +188,7 @@ defmodule Adyen123FS.Checkout do
       not Enum.all?(Map.keys(body), &is_binary/1) ->
         invalid("use Adyen string keys")
 
-      not Enum.all?(required, &present?(Map.get(body, &1))) ->
+      not Enum.all?(required, &present?(&1, Map.get(body, &1))) ->
         invalid("missing or invalid required fields: " <> Enum.join(required, ", "))
 
       Map.has_key?(body, "amount") and not amount?(body["amount"]) ->
@@ -202,9 +202,11 @@ defmodule Adyen123FS.Checkout do
   end
 
   defp validate(_, _), do: invalid("body must be a map")
-  defp present?(value) when is_binary(value), do: String.trim(value) != ""
-  defp present?(value) when is_map(value), do: map_size(value) > 0
-  defp present?(_), do: false
+
+  defp present?(field, value) when field in ["amount", "details", "paymentMethod"],
+    do: is_map(value) and not is_struct(value) and map_size(value) > 0
+
+  defp present?(_, value), do: is_binary(value) and String.trim(value) != ""
 
   defp amount?(%{"value" => value, "currency" => currency}) do
     is_integer(value) and value >= 0 and is_binary(currency) and

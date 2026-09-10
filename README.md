@@ -29,6 +29,9 @@ live_client = Adyen123FS.Client.new(
 
 Test is the default environment, Checkout API version 72 is the default version.
 Live URLs include your company prefix. No global configuration is required.
+The client uses the documented company-specific Checkout hostname and does not
+guess location-specific URL variants. Compare it with your Customer Area API URL
+before live use; custom location-specific endpoints need explicit future support.
 Requests return `{:ok, %Req.Response{}}` or `{:error, %Adyen123FS.Error{}}`.
 HTTP success is distinct from payment success; inspect `resultCode` and process
 verified webhooks. Redirects and automatic HTTP retries are disabled.
@@ -68,6 +71,12 @@ mix docs --warnings-as-errors
 The tests exercise the real public client against an in-process Req adapter;
 they do not contact Adyen or charge money. Add tests and observe them failing
 before implementing behavior. Keep commits focused and review each with CodeRabbit.
+
+The suite includes a pinned, independent Checkout v72 contract for all 16
+endpoint functions, Adyen's published HMAC vector and malformed/duplicate batch
+handling. CI checks Elixir 1.18, 1.19 and 1.20. See
+[merchant acceptance testing](guides/acceptance.md) before production rollout and
+[contributing](CONTRIBUTING.md) for the test-first and review workflow.
 
 ## Sources
 
