@@ -11,7 +11,7 @@ defmodule Adyen123FS.Checkout do
   Their options argument is mandatory; there are no convenience arities without
   it. Endpoint identifiers accept ASCII letters, digits, `_` and `-`, up to 1024
   bytes. This is a client resource limit, not an Adyen-defined identifier length.
-  Payment-method discovery is the exception. Responses are full `Req.Response`
+  Payment-method and card discovery are the exceptions. Responses are full `Req.Response`
   structs. Forward `action` unchanged to Adyen Web; complete 3DS or redirects
   with `submit_details/3`. A successful HTTP request is not proof of settlement.
   """
@@ -22,6 +22,23 @@ defmodule Adyen123FS.Checkout do
   def payment_methods(client, body, options \\ []) do
     with :ok <- validate(body, ["merchantAccount"]) do
       Client.request(client, :post, "/paymentMethods", body, options)
+    end
+  end
+
+  @doc """
+  POST `/cardDetails`: discover card brands and funding information.
+  Requires merchantAccount. Optional cardNumber, encryptedCardNumber, countryCode
+  and supportedBrands are passed through. The idempotency key is optional.
+
+  `cardNumber` contains an unencrypted card number or BIN. Never log or persist
+  it, and never accept this raw field from the browser in this integration.
+  Prefer `encryptedCardNumber` from Adyen Web. Passing full PANs through your
+  application brings it into PCI DSS card-data handling scope.
+  """
+  @spec card_details(Client.t(), map(), keyword()) :: Client.result()
+  def card_details(client, body, options \\ []) do
+    with :ok <- validate(body, ["merchantAccount"]) do
+      Client.request(client, :post, "/cardDetails", body, options)
     end
   end
 

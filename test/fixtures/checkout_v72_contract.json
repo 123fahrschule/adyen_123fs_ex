@@ -1,8 +1,13 @@
 {
   "source": "https://raw.githubusercontent.com/Adyen/adyen-openapi/f82d1fe674e536cc2c6b0d7946e0e827873a4fbf/json/CheckoutService-v72.json",
   "sha256": "f4081494707eb5ff6486397b366079b5375fcedb666bbe1604fe91bc01a4affb",
+  "revision": "f82d1fe674e536cc2c6b0d7946e0e827873a4fbf",
   "checked_at": "2026-09-10",
   "operations": {
+    "POST /cardDetails": {
+      "required_body": {"merchantAccount": "string"},
+      "required_query": []
+    },
     "POST /payments": {
       "required_body": {
         "amount": "object",

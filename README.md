@@ -47,7 +47,7 @@ Creating/modifying POST functions require the options argument explicitly;
 the initial 0.1.0 draft's shorter arities (for example `create_payment/2` and
 `capture/3`) have been removed because they could only return a validation error.
 Update those calls to supply `idempotency_key: persisted_key`.
-`payment_methods/2` remains available for discovery.
+`payment_methods/2` and `card_details/2` remain available for discovery.
 
 `error.retryable` tells a durable job whether a retry is permitted. HTTP errors
 require Adyen's `transient-error: true`; keyed POST transport failures are also
@@ -85,7 +85,7 @@ The tests exercise the real public client against an in-process Req adapter;
 they do not contact Adyen or charge money. Add tests and observe them failing
 before implementing behavior. Keep commits focused and review each with CodeRabbit.
 
-The suite includes a pinned, independent Checkout v72 contract for all 16
+The suite includes a pinned, independent Checkout v72 contract for all supported
 endpoint functions, Adyen's published HMAC vector and malformed/duplicate batch
 handling. CI checks Elixir 1.18, 1.19 and 1.20. See
 [merchant acceptance testing](guides/acceptance.md) before production rollout and
@@ -139,6 +139,14 @@ the outcome use `get_session(client, session_id, session_result)` with the actua
 result from Adyen Web. A session ID alone cannot be polled for its result.
 
 ### Payment methods
+
+`Checkout.card_details(client, %{"merchantAccount" => merchant_account,
+"encryptedCardNumber" => encrypted_card_number})` discovers card brands and
+funding information. The optional `cardNumber` field contains an unencrypted
+card number or BIN: never log or persist it, and never accept that raw field from
+the browser in this integration. Prefer `encryptedCardNumber` from Adyen Web.
+Handling full PANs brings your application into PCI DSS card-data handling scope.
+See [Adyen's card-details contract](https://docs.adyen.com/api-explorer/Checkout/72/post/cardDetails).
 
 | Method | paymentMethod.type | Source of payment details |
 | --- | --- | --- |

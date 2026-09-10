@@ -18,7 +18,8 @@ implementation under test.
 CheckoutService-v72 OpenAPI specification, pinned to the source revision and
 SHA-256 recorded in the fixture. It includes HTTP methods, routes, required body
 fields/types and required query parameters. It is not generated from this SDK.
-`api_contract_test.exs` invokes all 16 public endpoint functions against it.
+`api_contract_test.exs` invokes all supported public Checkout endpoint functions
+against it, including discovery without an idempotency key.
 
 When upgrading the API version, retrieve the official specification at a pinned
 revision, re-extract the supported operations, and inspect the diff. Keep test

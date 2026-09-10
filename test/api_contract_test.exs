@@ -5,7 +5,8 @@ defmodule Adyen123FS.APIContractTest do
   @contract File.read!(Path.join(__DIR__, "fixtures/checkout_v72_contract.json"))
             |> Jason.decode!()
   @operations [
-    {:payment_methods, "POST /paymentMethods", :body},
+    {:payment_methods, "POST /paymentMethods", :body_optional_key},
+    {:card_details, "POST /cardDetails", :body_optional_key},
     {:create_payment, "POST /payments", :body},
     {:submit_details, "POST /payments/details", :body},
     {:create_session, "POST /sessions", :body},
@@ -40,6 +41,10 @@ defmodule Adyen123FS.APIContractTest do
           assert String.upcase(Atom.to_string(request.method)) == method
           assert request.url.path == "/v72" <> path
           if body != %{}, do: assert(Jason.decode!(request.body) == body)
+
+          if @kind == :body_optional_key,
+            do: assert(Req.Request.get_header(request, "idempotency-key") == [])
+
           query = URI.decode_query(request.url.query || "")
           for key <- @specification["required_query"], do: assert(Map.has_key?(query, key))
           {request, Req.Response.new(status: 200, body: %{})}
@@ -48,7 +53,7 @@ defmodule Adyen123FS.APIContractTest do
       assert {:ok, _} = invoke(client, @function, @kind, body)
     end
 
-    if kind in [:body, :modification, :update_session] do
+    if kind in [:body, :body_optional_key, :modification, :update_session] do
       test "#{function} rejects missing or wrongly typed required fields" do
         body = sample_body(@specification["required_body"])
         client = TestAdapter.client(fn _ -> flunk("invalid request must not reach Adyen") end)
@@ -74,6 +79,37 @@ defmodule Adyen123FS.APIContractTest do
       {key, _} -> {key, "test-value"}
     end)
   end
+
+  test "card discovery preserves optional fields and allows an explicit operation key" do
+    for options <- [[], [idempotency_key: "discovery-key"]] do
+      body = %{
+        "merchantAccount" => "Merchant",
+        "encryptedCardNumber" => "test_encrypted",
+        "countryCode" => "DE",
+        "supportedBrands" => ["visa", "mc"],
+        "futureField" => %{"preserved" => true}
+      }
+
+      response = %{"brands" => [%{"type" => "visa", "supported" => true}]}
+
+      client =
+        TestAdapter.client(fn req ->
+          assert req.method == :post
+          assert req.url.path == "/v72/cardDetails"
+          assert Jason.decode!(req.body) == body
+
+          assert Req.Request.get_header(req, "idempotency-key") ==
+                   List.wrap(options[:idempotency_key])
+
+          {req, Req.Response.new(status: 200, body: response)}
+        end)
+
+      assert {:ok, %{body: ^response}} = apply(Checkout, :card_details, [client, body, options])
+    end
+  end
+
+  defp invoke(client, function, :body_optional_key, body),
+    do: apply(Checkout, function, [client, body])
 
   defp invoke(client, function, :body, body),
     do: apply(Checkout, function, [client, body, [idempotency_key: "operation"]])
