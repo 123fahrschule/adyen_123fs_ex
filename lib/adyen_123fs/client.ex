@@ -9,7 +9,9 @@ defmodule Adyen123FS.Client do
   primarily for tests). No application-global configuration is read or changed.
 
   Requests never follow redirects or automatically retry. The caller owns the
-  durable operation and retry policy. Client `Inspect` excludes the API key;
+  durable retry policy; all POST transport failures without an idempotency key
+  are conservatively marked non-retryable, including `/paymentMethods`.
+  Client `Inspect` excludes the API key;
   the stored Req template contains no credentials. The outgoing request must
   contain the key, so never log it or directly inspect the `api_key` field.
   """
@@ -101,7 +103,8 @@ defmodule Adyen123FS.Client do
           response_result(response, safe_retry)
 
         {:error, reason} ->
-          {:error, %Error{kind: :transport, reason: reason, retryable: safe_retry}}
+          {:error,
+           Error.with_message(%Error{kind: :transport, reason: reason, retryable: safe_retry})}
       end
     end
   end
@@ -181,7 +184,7 @@ defmodule Adyen123FS.Client do
           end
 
         {:error,
-         %Error{
+         Error.with_message(%Error{
            kind: if(success, do: :protocol, else: :api),
            status: response.status,
            headers: response.headers,
@@ -189,7 +192,7 @@ defmodule Adyen123FS.Client do
            retryable:
              not success and safe_retry and
                Req.Response.get_header(response, "transient-error") == ["true"]
-         }}
+         })}
     end
   end
 

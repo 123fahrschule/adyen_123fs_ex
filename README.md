@@ -49,15 +49,22 @@ retryable because their outcome is unknown. A timeout is not a failed payment.
 An HTTP response without that header, or with `false`, must not be retried
 automatically. Reconcile uncertain results using webhooks and your operation log.
 
-The full `error.headers` includes `retry-after` (a list of header values, possibly
-an HTTP date rather than seconds). Schedule the retry no earlier than that time,
-and use bounded exponential backoff with jitter. The client makes **one HTTP
+The full `error.headers` preserves `retry-after` **if present** (a list of header
+values, possibly an HTTP date rather than seconds). Adyen does not guarantee this
+header. When a retry is permitted, respect a valid `retry-after` value and use
+bounded exponential backoff with jitter, including when the header is absent.
+The client makes **one HTTP
 attempt** and does not sleep, drop the key, or retry behind your job queue.
 
 Errors distinguish `:validation`, `:api`, `:protocol` (unexpected success body),
 and `:transport`. Error `Inspect` hides bodies and reasons. Raw response bodies,
 headers, wallet tokens and session data can contain sensitive data: do not log
-them. The library emits no request payload logs or telemetry.
+them. Library-generated `error.message` provides a loggable summary with HTTP
+status, retry eligibility and constrained error codes/types or known transport
+categories. Arbitrary provider messages and unknown diagnostics are omitted.
+The library emits no logs or telemetry; the consuming service owns monitoring.
+Even `/paymentMethods` transport failures conservatively require an idempotency
+key to be marked retryable, consistent with the policy for every POST.
 
 ## Development
 
