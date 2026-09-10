@@ -26,3 +26,21 @@ revision, re-extract the supported operations, and inspect the diff. Keep test
 fixtures offline and deterministic. These contract tests check routing and
 required shapes; they do not replace Adyen's full conditional schema validation
 or sandbox acceptance testing for your merchant account.
+
+`data_protection_v1_contract.json` records the pinned Data Protection v1 method
+and path. Its OpenAPI required-body list is empty; the separately attributed
+documentation contract requires merchantAccount and pspReference and lists the
+four result values. `data_protection_test.exs` checks that stricter input policy,
+service routing and unchanged result handling.
+
+`webhooks_v1_contract.json` extracts NotificationRequestItem's required fields
+and sorted 40-value eventCode enum from pinned Webhooks v1. Each new fixture
+records its source revision and the SHA-256 of the complete upstream JSON file,
+not of the extracted fixture. The implementation contains its own event list;
+tests compare it with the independent fixture without loading fixtures at runtime.
+
+The unknown-event HMAC vector in `webhook_test.exs` was calculated independently
+with Python hmac/hashlib, the public example key and the canonical UTF-8 string
+`7914073381342284::TestMerchant:TestPayment-1407325143704:1130:EUR:NOT_A_REAL_EVENT:true`.
+It proves that signature verification continues to accept a valid unknown event
+so the application can route it to reconciliation.

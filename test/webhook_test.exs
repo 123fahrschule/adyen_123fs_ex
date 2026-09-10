@@ -5,6 +5,63 @@ defmodule Adyen123FS.WebhookTest do
   @key "44782DEF547AAA06C910C43932B1EB0C71FC68D9D0C057550C48EC2ACF6BA056"
   @fixture File.read!(Path.join(__DIR__, "fixtures/standard_webhook.json")) |> Jason.decode!()
   @item hd(@fixture["notificationItems"])["NotificationRequestItem"]
+  @contract __DIR__
+            |> Path.join("fixtures/webhooks_v1_contract.json")
+            |> File.read!()
+            |> Jason.decode!()
+
+  test "event catalog exactly matches the sorted pinned Webhooks v1 enum" do
+    assert length(@contract["event_codes"]) == 40
+    assert apply(Webhook, :event_codes, []) == Enum.sort(@contract["event_codes"])
+    for code <- @contract["event_codes"], do: assert(apply(Webhook, :known_event_code?, [code]))
+
+    for code <- ["NOT_A_REAL_EVENT", "authorisation", "", nil, :AUTHORISATION, 1, %{}, []],
+        do: refute(apply(Webhook, :known_event_code?, [code]))
+  end
+
+  test "signed fields distinguish schema requirements from authenticated values" do
+    expected =
+      @contract["required"]
+      |> List.delete("eventDate")
+      |> Kernel.++(["originalReference"])
+      |> Enum.sort()
+
+    assert apply(Webhook, :signed_fields, []) |> Enum.sort() == expected
+  end
+
+  test "unknown event codes can still be authenticated and routed to reconciliation" do
+    item =
+      @item
+      |> Map.put("eventCode", "NOT_A_REAL_EVENT")
+      |> put_in(
+        ["additionalData", "hmacSignature"],
+        "Ya/QMzZsKMvNxZovc55YAmjEUtZ7TLVD+MjugIkAvqc="
+      )
+
+    assert Webhook.verify_standard(item, @key)
+
+    assert {:ok, [^item]} =
+             Webhook.verify_standard_request(
+               %{"notificationItems" => [%{"NotificationRequestItem" => item}]},
+               @key
+             )
+
+    refute apply(Webhook, :known_event_code?, [item["eventCode"]])
+  end
+
+  test "eventDate, paymentMethod, reason and additional metadata are not authenticated" do
+    item =
+      @item
+      |> Map.put("eventDate", "untrusted")
+      |> Map.put("paymentMethod", "untrusted")
+      |> Map.put("reason", "untrusted")
+      |> put_in(["additionalData", "unsigned"], "untrusted")
+
+    assert Webhook.verify_standard(item, @key)
+
+    for field <- ["eventDate", "paymentMethod", "reason", "additionalData"],
+        do: refute(field in apply(Webhook, :signed_fields, []))
+  end
 
   test "validates the independent signature published by Adyen" do
     assert Webhook.verify_standard(@item, @key)

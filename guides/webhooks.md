@@ -67,6 +67,24 @@ keys, request bodies, wallet tokens, session data or full response structs.
 
 ## Duplicates and ordering
 
+`Webhook.event_codes/0` returns the 40 sorted codes in the pinned Webhooks v1
+schema. After signature verification and durable storage, use
+`Webhook.known_event_code?/1` to classify events. Send unknown codes, and known
+codes unsupported by your own state machine, to reconciliation. This catalog
+must not reject an otherwise valid signature or silently discard an event.
+
+`Webhook.signed_fields/0` lists seven top-level fields covering eight HMAC values:
+pspReference, originalReference, merchantAccountCode, merchantReference,
+amount.value, amount.currency, eventCode and success. The schema's required
+fields differ: eventDate is required but unsigned; originalReference is optional
+and contributes an empty value when absent.
+
+eventDate, paymentMethod, reason and extra additionalData are **not authenticated**
+by Standard HMAC. The hmacSignature inside additionalData is the signature to
+verify, not authentication of neighbouring metadata. Do not make financial or
+state decisions from unsigned fields; paymentMethod and reason are only display
+or diagnostic information. Only value and currency within amount are signed.
+
 Delivery can be repeated and out of order. Adyen documents `eventCode` plus
 `pspReference` for duplicate recognition; scope your inbox keys to merchant and
 environment as well. Keep the original payload for reconciliation and account
