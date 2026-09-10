@@ -9,6 +9,9 @@ Oban or RabbitMQ dependency is imposed by this package.
 Add the plug in your Phoenix endpoint **before `Plug.Parsers`**, so it can read
 the complete raw request body and enforce its size limit. The exact path is
 handled and halted; all other requests continue down the endpoint pipeline.
+Configure the identical path in Adyen: `/webhooks/adyen/` does not match
+`/webhooks/adyen`. Ensure unmatched webhook paths return an error, never a
+catch-all HTTP 200 that would acknowledge an event without storing it.
 
 ```elixir
 plug Adyen123FS.WebhookPlug,
@@ -54,7 +57,11 @@ database job or poll unprocessed inbox rows. Keep business processing short and
 outside the webhook HTTP request. Adyen expects an acknowledgement within ten
 seconds; set short DB/pool timeouts in the callback so overload fails promptly.
 
-An HMAC key source that raises also fails the request. Monitor these failures
+An HMAC key source that raises also fails the request. A callback returning
+missing, empty or invalid keys raises a sanitized `ArgumentError`; every key
+must be a 64-character hexadecimal string, including previous rotation keys.
+This is a server configuration failure, not HTTP 401 for an invalid signature.
+Monitor these failures
 and database failures as operational problems. Do not log API keys, webhook
 keys, request bodies, wallet tokens, session data or full response structs.
 

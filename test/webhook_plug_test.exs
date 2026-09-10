@@ -93,6 +93,39 @@ defmodule Adyen123FS.WebhookPlugTest do
     assert WebhookPlug.call(conn(), opts).status == 202
   end
 
+  test "invalid runtime keys raise a sanitized configuration error instead of returning 401" do
+    for keys <- [
+          nil,
+          [],
+          "",
+          "secret-not-hex",
+          [@key, "secret-invalid"],
+          {__MODULE__, :rotating_keys, []}
+        ] do
+      opts =
+        options(
+          hmac_keys: {__MODULE__, :configured_keys, [keys]},
+          persist: fn _ -> flunk("must not persist") end
+        )
+
+      assert_raise ArgumentError, "invalid webhook option: resolved hmac_keys", fn ->
+        WebhookPlug.call(conn(), opts)
+      end
+    end
+  end
+
+  test "valid runtime keys still distinguish forged signatures with 401" do
+    opts =
+      options(
+        hmac_keys: {__MODULE__, :configured_keys, [[@key]]},
+        persist: fn _ -> flunk("must not persist") end
+      )
+
+    assert WebhookPlug.call(conn(String.replace(@raw, "1130", "1131")), opts).status == 401
+  end
+
+  def configured_keys(keys), do: keys
+
   test "body read failures do not acknowledge" do
     conn = %{conn() | adapter: {ChunkAdapter, :failed}}
 

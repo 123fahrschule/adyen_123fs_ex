@@ -17,7 +17,9 @@ if Code.ensure_loaded?(Plug.Conn) do
     persistence, 503 on non-`:ok` storage results, 401 for invalid signatures,
     403 for a merchant mismatch, 400 for malformed payloads, 413 for oversized
     bodies and 405 for other methods. Handler exceptions propagate so the HTTP
-    server fails the request; they are never acknowledged. No business logic,
+    server fails the request; they are never acknowledged. Invalid runtime HMAC
+    keys raise a sanitized `ArgumentError`, rather than returning signature-error
+    HTTP 401. No business logic,
     in-memory deduplication or asynchronous fire-and-forget persistence is used.
 
     Header-signed non-standard webhooks require a separate endpoint using
@@ -112,11 +114,18 @@ if Code.ensure_loaded?(Plug.Conn) do
 
     defp persist({module, function, args}, items), do: apply(module, function, [items | args])
     defp persist(function, items), do: function.(items)
-    defp resolve_keys({module, function, args}), do: apply(module, function, args)
+
+    defp resolve_keys({module, function, args}) do
+      keys = apply(module, function, args)
+      unless valid_keys?(keys), do: invalid!("resolved hmac_keys")
+      keys
+    end
+
     defp resolve_keys(keys), do: keys
     defp key_source?({module, function, args}), do: mfa?(module, function, args)
+    defp key_source?(keys), do: valid_keys?(keys)
 
-    defp key_source?(keys) do
+    defp valid_keys?(keys) do
       keys = List.wrap(keys)
 
       keys != [] and
