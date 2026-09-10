@@ -8,6 +8,9 @@ defmodule Adyen123FS.Checkout do
   are checked locally; Adyen validates payment-method-specific requirements.
 
   All creating/modifying POST operations require `idempotency_key: persisted_key`.
+  Their options argument is mandatory; there are no convenience arities without
+  it. Endpoint identifiers accept ASCII letters, digits, `_` and `-`, up to 1024
+  bytes. This is a client resource limit, not an Adyen-defined identifier length.
   Payment-method discovery is the exception. Responses are full `Req.Response`
   structs. Forward `action` unchanged to Adyen Web; complete 3DS or redirects
   with `submit_details/3`. A successful HTTP request is not proof of settlement.
@@ -29,7 +32,7 @@ defmodule Adyen123FS.Checkout do
   Preserve resultCode and action; Refused is also an HTTP 2xx response.
   """
   @spec create_payment(Client.t(), map(), keyword()) :: Client.result()
-  def create_payment(client, body, options \\ []) do
+  def create_payment(client, body, options) do
     post(
       client,
       "/payments",
@@ -41,12 +44,12 @@ defmodule Adyen123FS.Checkout do
 
   @doc "POST `/payments/details`: complete 3DS or a redirect using details. paymentData is optional/flow-dependent."
   @spec submit_details(Client.t(), map(), keyword()) :: Client.result()
-  def submit_details(client, body, options \\ []),
+  def submit_details(client, body, options),
     do: post(client, "/payments/details", body, ["details"], options)
 
   @doc "POST `/sessions`: create a Drop-in/Components session. Requires amount, merchantAccount, reference, returnUrl."
   @spec create_session(Client.t(), map(), keyword()) :: Client.result()
-  def create_session(client, body, options \\ []),
+  def create_session(client, body, options),
     do:
       post(
         client,
@@ -88,7 +91,7 @@ defmodule Adyen123FS.Checkout do
   Merchant validation is separate from Checkout's payment session.
   """
   @spec apple_pay_session(Client.t(), map(), keyword()) :: Client.result()
-  def apple_pay_session(client, body, options \\ []),
+  def apple_pay_session(client, body, options),
     do:
       post(
         client,
@@ -105,17 +108,17 @@ defmodule Adyen123FS.Checkout do
   pspReference belongs to the modification, not the original authorisation.
   """
   @spec capture(Client.t(), String.t(), map(), keyword()) :: Client.result()
-  def capture(client, psp_reference, body, options \\ []),
+  def capture(client, psp_reference, body, options),
     do: modify(client, psp_reference, "captures", body, ["amount", "merchantAccount"], options)
 
   @doc "POST `/payments/{paymentPspReference}/refunds`: full/partial refund after capture. Requires amount and merchantAccount; outcome is asynchronous."
   @spec refund(Client.t(), String.t(), map(), keyword()) :: Client.result()
-  def refund(client, psp_reference, body, options \\ []),
+  def refund(client, psp_reference, body, options),
     do: modify(client, psp_reference, "refunds", body, ["amount", "merchantAccount"], options)
 
   @doc "POST `/payments/{paymentPspReference}/cancels`: cancel an uncaptured authorisation. Requires merchantAccount."
   @spec cancel(Client.t(), String.t(), map(), keyword()) :: Client.result()
-  def cancel(client, psp_reference, body, options \\ []),
+  def cancel(client, psp_reference, body, options),
     do: modify(client, psp_reference, "cancels", body, ["merchantAccount"], options)
 
   @doc """
@@ -124,12 +127,12 @@ defmodule Adyen123FS.Checkout do
   The optional reference identifies the cancellation, not the original payment.
   """
   @spec cancel_by_reference(Client.t(), map(), keyword()) :: Client.result()
-  def cancel_by_reference(client, body, options \\ []),
+  def cancel_by_reference(client, body, options),
     do: post(client, "/cancels", body, ["merchantAccount", "paymentReference"], options)
 
   @doc "POST `/payments/{paymentPspReference}/reversals`: cancel or refund when capture state is unknown. Requires merchantAccount; outcome is asynchronous."
   @spec reverse(Client.t(), String.t(), map(), keyword()) :: Client.result()
-  def reverse(client, psp_reference, body, options \\ []),
+  def reverse(client, psp_reference, body, options),
     do: modify(client, psp_reference, "reversals", body, ["merchantAccount"], options)
 
   @doc """
@@ -138,7 +141,7 @@ defmodule Adyen123FS.Checkout do
   required by your authorisation-adjustment flow; scheme eligibility applies.
   """
   @spec update_amount(Client.t(), String.t(), map(), keyword()) :: Client.result()
-  def update_amount(client, psp_reference, body, options \\ []),
+  def update_amount(client, psp_reference, body, options),
     do:
       modify(client, psp_reference, "amountUpdates", body, ["amount", "merchantAccount"], options)
 
@@ -152,7 +155,7 @@ defmodule Adyen123FS.Checkout do
 
   @doc "POST `/storedPaymentMethods`: create a token with merchantAccount, shopperReference, recurringProcessingModel and paymentMethod. Obtain shopper consent first."
   @spec store_payment_method(Client.t(), map(), keyword()) :: Client.result()
-  def store_payment_method(client, body, options \\ []),
+  def store_payment_method(client, body, options),
     do:
       post(
         client,
@@ -222,9 +225,10 @@ defmodule Adyen123FS.Checkout do
   end
 
   defp identifier(value) do
-    if is_binary(value) and Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, value),
-      do: :ok,
-      else: invalid("invalid identifier")
+    if is_binary(value) and byte_size(value) <= 1024 and
+         Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, value),
+       do: :ok,
+       else: invalid("invalid identifier")
   end
 
   defp require_string(value, field) do

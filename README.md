@@ -43,6 +43,12 @@ before sending. Supply `idempotency_key: persisted_key` on every attempt. Each
 capture and refund is a separate operation with its own key. Never change the
 payload or region while retrying an operation.
 
+Creating/modifying POST functions require the options argument explicitly;
+the initial 0.1.0 draft's shorter arities (for example `create_payment/2` and
+`capture/3`) have been removed because they could only return a validation error.
+Update those calls to supply `idempotency_key: persisted_key`.
+`payment_methods/2` remains available for discovery.
+
 `error.retryable` tells a durable job whether a retry is permitted. HTTP errors
 require Adyen's `transient-error: true`; keyed POST transport failures are also
 retryable because their outcome is unknown. A timeout is not a failed payment.

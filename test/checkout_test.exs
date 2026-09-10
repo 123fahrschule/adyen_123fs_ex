@@ -114,7 +114,7 @@ defmodule Adyen123FS.CheckoutTest do
       assert {:error, %{kind: :validation}} = Checkout.create_payment(client, body, @key)
     end
 
-    assert {:error, %{kind: :validation}} = Checkout.create_session(client, @payment)
+    assert {:error, %{kind: :validation}} = Checkout.create_session(client, @payment, [])
     assert {:error, %{kind: :validation}} = Checkout.submit_details(client, %{}, @key)
 
     assert {:error, %{kind: :validation}} =
@@ -173,5 +173,63 @@ defmodule Adyen123FS.CheckoutTest do
       assert {:error, %{kind: :validation}} =
                Checkout.create_session(client, Map.put(@payment, "amount", amount), @key)
     end
+  end
+
+  test "key-required operations expose only arities with explicit options" do
+    Code.ensure_loaded!(Checkout)
+
+    for {function, arity} <- [
+          create_payment: 3,
+          submit_details: 3,
+          create_session: 3,
+          apple_pay_session: 3,
+          cancel_by_reference: 3,
+          store_payment_method: 3,
+          capture: 4,
+          refund: 4,
+          cancel: 4,
+          reverse: 4,
+          update_amount: 4
+        ] do
+      assert function_exported?(Checkout, function, arity)
+      refute function_exported?(Checkout, function, arity - 1)
+    end
+
+    assert function_exported?(Checkout, :payment_methods, 2)
+  end
+
+  test "oversized identifiers fail before constructing network requests" do
+    client = TestAdapter.client(fn _ -> flunk("must not send") end)
+
+    for size <- [1025, 1_000_000] do
+      id = String.duplicate("A", size)
+      assert {:error, %{kind: :validation}} = Checkout.get_session(client, id, "result")
+
+      assert {:error, %{kind: :validation}} =
+               Checkout.update_session(client, id, %{
+                 "sessionData" => "data",
+                 "amount" => @payment["amount"]
+               })
+
+      assert {:error, %{kind: :validation}} = Checkout.capture(client, id, @payment, @key)
+
+      assert {:error, %{kind: :validation}} =
+               Checkout.delete_stored_payment_method(client, id, %{
+                 "merchantAccount" => "Merchant",
+                 "shopperReference" => "S"
+               })
+    end
+  end
+
+  test "identifier resource limit does not impose an undocumented 64-character API limit" do
+    id = String.duplicate("A", 1024)
+
+    client =
+      TestAdapter.client(fn req ->
+        assert req.url.path == "/v72/sessions/" <> id
+        {req, Req.Response.new(status: 200, body: %{})}
+      end)
+
+    assert {:ok, _} = Checkout.get_session(client, id, "result")
   end
 end
