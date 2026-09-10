@@ -19,7 +19,7 @@ defmodule Adyen123FS.MixProject do
 
   defp deps do
     [
-      {:req, "~> 0.5"},
+      {:req, "~> 0.7.4"},
       {:jason, "~> 1.4"},
       {:plug, "~> 1.16", optional: true},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}

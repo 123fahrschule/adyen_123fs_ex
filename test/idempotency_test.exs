@@ -116,6 +116,14 @@ defmodule Adyen123FS.IdempotencyTest do
     a = Adyen123FS.idempotency_key()
     b = Adyen123FS.idempotency_key()
     assert a != b
+
+    client =
+      TestAdapter.client(fn request ->
+        assert Req.Request.get_header(request, "idempotency-key") == []
+        {request, Req.Response.new(status: 200, body: %{})}
+      end)
+
+    assert {:ok, _} = Client.request(client, :post, "/paymentMethods", %{})
     assert a =~ ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
   end
 end

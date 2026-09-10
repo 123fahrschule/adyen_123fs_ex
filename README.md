@@ -65,3 +65,69 @@ before implementing behavior. Keep commits focused and review each with CodeRabb
 - [Req](https://hexdocs.pm/req/Req.html)
 
 This is an independent client maintained by 123Fahrschule, not an official Adyen SDK.
+
+## Payments and 3DS
+
+```elixir
+alias Adyen123FS.Checkout
+
+# payment_method is the paymentMethod map provided by Adyen Web Components.
+# amount and reference must come from your server-side order, not the browser.
+params = %{
+  "merchantAccount" => merchant_account,
+  "amount" => %{"currency" => "EUR", "value" => 15000},
+  "reference" => registration_reference,
+  "returnUrl" => "https://signup.123fahrschule.de/payments/return",
+  "paymentMethod" => payment_method,
+  "channel" => "Web",
+  "origin" => "https://signup.123fahrschule.de",
+  "browserInfo" => browser_info
+}
+
+Checkout.create_payment(client, params, idempotency_key: payment_operation_key)
+
+# After the Component's onAdditionalDetails or a redirect return:
+Checkout.submit_details(client, %{"details" => details},
+  idempotency_key: details_operation_key)
+```
+
+Forward Adyen's `action` to the Component without interpreting or stripping its
+fields. `IdentifyShopper`, `ChallengeShopper` and `RedirectShopper` need further
+shopper interaction. Pass the Component's details, including `paymentData` when
+provided, to `submit_details/3`; reuse its operation key on retries. Handle
+`Authorised`, `Refused`, `Pending`, `Received`, `Cancelled` and `Error` explicitly.
+Treat unrecognised result codes conservatively. Verified webhooks drive your
+durable payment state; an `Authorised` result is not a capture confirmation.
+
+For the Sessions flow, use `create_session/3` with amount, merchantAccount,
+reference and returnUrl. Return `id` and `sessionData` to Adyen Web. To retrieve
+the outcome use `get_session(client, session_id, session_result)` with the actual
+result from Adyen Web. A session ID alone cannot be polled for its result.
+
+### Payment methods
+
+| Method | paymentMethod.type | Source of payment details |
+| --- | --- | --- |
+| Credit cards | `scheme` | Adyen Components encrypted fields or storedPaymentMethodId |
+| Apple Pay | `applepay` | Component payload including applePayToken |
+| Google Pay | `googlepay` | Component payload including googlePayToken |
+| Alma | `alma` | Redirect flow; additional shopper and order data as required |
+
+This package implements the server API. Adyen Web remains responsible for secure
+card fields, wallet buttons, device support and 3DS challenges. It neither stores
+raw card details nor decrypts wallet tokens. `apple_pay_session/3` covers Adyen's
+merchant-validation endpoint when that integration requires a server call; it
+does not replace Apple Pay domain registration.
+
+Call `payment_methods/2` with your merchantAccount, countryCode, amount and
+shopperLocale to discover what Adyen enables for that transaction. In the current
+[Alma documentation](https://docs.adyen.com/payment-methods/alma/api-only), Adyen
+lists France/EUR. Do not assume an Alma offer for German shoppers just because
+the client supports its API. Add telephoneNumber, shopperEmail, billingAddress
+and deliveryAddress as required by your integration. The optional
+`additionalData["alma.installments_count"]` selects 3 or 4 installments; omit it
+to let the shopper choose. Complete its redirect through `submit_details/3`.
+
+The new signup domain still needs Adyen Allowed Origins and the applicable
+Apple Pay domain verification / Google Pay website approval. The SDK cannot
+enable payment methods or merchant capabilities in any provider account.
