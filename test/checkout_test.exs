@@ -196,6 +196,7 @@ defmodule Adyen123FS.CheckoutTest do
     end
 
     assert function_exported?(Checkout, :payment_methods, 2)
+    assert function_exported?(Checkout, :card_details, 2)
   end
 
   test "oversized identifiers fail before constructing network requests" do
