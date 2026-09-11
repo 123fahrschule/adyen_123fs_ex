@@ -39,23 +39,24 @@ defmodule Adyen123FS.APIContractTest do
     assert MapSet.equal?(listed, exported)
   end
 
-  for {function, operation, kind, _arities} <- @operations do
+  for {function, operation, kind, arities} <- @operations, arity <- arities do
+    @arity arity
     @function function
     @operation operation
     @kind kind
     @specification @contract["operations"][operation]
 
-    test "#{function} rejects a Data Protection client before network access" do
+    test "#{function}/#{arity} rejects a Data Protection client before network access" do
       TestAdapter.register(fn _ -> flunk("wrong service must not reach Adyen") end)
       client = Client.new(api_key: "key", service: :data_protection, adapter: TestAdapter)
       body = sample_body(@specification["required_body"])
 
       assert {:error,
               %{kind: :validation, message: "client is configured for a different Adyen service"}} =
-               invoke(client, @function, @kind, body)
+               invoke(client, @function, @kind, body, @arity)
     end
 
-    test "#{function} obeys the pinned Adyen v72 method, path and required field contract" do
+    test "#{function}/#{arity} obeys the pinned Adyen v72 method, path and required field contract" do
       body = sample_body(@specification["required_body"])
       [method, path] = String.split(@operation, " ", parts: 2)
       path = Regex.replace(~r/\{[^}]+\}/, path, "RESOURCE123")
@@ -66,8 +67,10 @@ defmodule Adyen123FS.APIContractTest do
           assert request.url.path == "/v72" <> path
           if body != %{}, do: assert(Jason.decode!(request.body) == body)
 
-          if @kind == :body_optional_key,
-            do: assert(Req.Request.get_header(request, "idempotency-key") == [])
+          if @kind == :body_optional_key do
+            expected_key = if @arity == 3, do: ["operation"], else: []
+            assert Req.Request.get_header(request, "idempotency-key") == expected_key
+          end
 
           if @kind == :expire_link do
             assert Req.Request.get_header(request, "idempotency-key") == []
@@ -79,22 +82,22 @@ defmodule Adyen123FS.APIContractTest do
           {request, Req.Response.new(status: 200, body: %{})}
         end)
 
-      assert {:ok, _} = invoke(client, @function, @kind, body)
+      assert {:ok, _} = invoke(client, @function, @kind, body, @arity)
     end
 
     if kind in [:body, :body_optional_key, :modification, :update_session] do
-      test "#{function} rejects missing or wrongly typed required fields" do
+      test "#{function}/#{arity} rejects missing or wrongly typed required fields" do
         body = sample_body(@specification["required_body"])
         client = TestAdapter.client(fn _ -> flunk("invalid request must not reach Adyen") end)
 
         for {field, type} <- @specification["required_body"] do
           assert {:error, %{kind: :validation}} =
-                   invoke(client, @function, @kind, Map.delete(body, field))
+                   invoke(client, @function, @kind, Map.delete(body, field), @arity)
 
           wrong = if type == "object", do: "wrong", else: %{"wrong" => "type"}
 
           assert {:error, %{kind: :validation}} =
-                   invoke(client, @function, @kind, Map.put(body, field, wrong))
+                   invoke(client, @function, @kind, Map.put(body, field, wrong), @arity)
         end
       end
     end
@@ -138,8 +141,14 @@ defmodule Adyen123FS.APIContractTest do
     end
   end
 
-  defp invoke(client, function, :body_optional_key, body),
+  defp invoke(client, function, :body_optional_key, body, 2),
     do: apply(Checkout, function, [client, body])
+
+  defp invoke(client, function, :body_optional_key, body, 3),
+    do: apply(Checkout, function, [client, body, [idempotency_key: "operation"]])
+
+  defp invoke(client, function, kind, body, _arity),
+    do: invoke(client, function, kind, body)
 
   defp invoke(client, function, kind, _) when kind in [:resource, :expire_link],
     do: apply(Checkout, function, [client, "RESOURCE123"])
