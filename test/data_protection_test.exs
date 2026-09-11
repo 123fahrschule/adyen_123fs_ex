@@ -25,7 +25,7 @@ defmodule Adyen123FS.DataProtectionTest do
         end)
 
       assert {:ok, %{status: 200, body: ^response}} =
-               apply(DataProtection, :request_subject_erasure, [client, @body])
+               DataProtection.request_subject_erasure(client, @body)
     end
   end
 
@@ -36,18 +36,18 @@ defmodule Adyen123FS.DataProtectionTest do
     for {field, "string"} <- @contract["documentation_contract"]["required_body"],
         value <- [nil, "", " ", 123, %{}] do
       assert {:error, %{kind: :validation, retryable: false}} =
-               apply(DataProtection, :request_subject_erasure, [
+               DataProtection.request_subject_erasure(
                  client,
                  Map.put(@body, field, value)
-               ])
+               )
 
       assert {:error, %{kind: :validation}} =
-               apply(DataProtection, :request_subject_erasure, [client, Map.delete(@body, field)])
+               DataProtection.request_subject_erasure(client, Map.delete(@body, field))
     end
 
     for body <- ["invalid", %{merchantAccount: "Merchant", pspReference: "PAYMENT123"}] do
       assert {:error, %{kind: :validation}} =
-               apply(DataProtection, :request_subject_erasure, [client, body])
+               DataProtection.request_subject_erasure(client, body)
     end
   end
 
@@ -61,7 +61,7 @@ defmodule Adyen123FS.DataProtectionTest do
           {req, Req.Response.new(status: 200, body: %{"result" => "SUCCESS"})}
         end)
 
-      assert {:ok, _} = apply(DataProtection, :request_subject_erasure, [client, body, []])
+      assert {:ok, _} = DataProtection.request_subject_erasure(client, body, [])
     end
   end
 
@@ -70,7 +70,7 @@ defmodule Adyen123FS.DataProtectionTest do
 
     assert {:error,
             %{kind: :validation, message: "client is configured for a different Adyen service"}} =
-             apply(DataProtection, :request_subject_erasure, [client, @body])
+             DataProtection.request_subject_erasure(client, @body)
   end
 
   test "transport and transient HTTP errors are never marked automatically retryable" do
@@ -85,7 +85,7 @@ defmodule Adyen123FS.DataProtectionTest do
       client = client(fn req -> {req, failure} end)
 
       assert {:error, %{retryable: false, message: message}} =
-               apply(DataProtection, :request_subject_erasure, [client, @body])
+               DataProtection.request_subject_erasure(client, @body)
 
       assert is_binary(message)
     end
@@ -96,7 +96,7 @@ defmodule Adyen123FS.DataProtectionTest do
 
     for options <- [[idempotency_key: "unsupported"], [query: %{"extra" => %{}}], [retry: true]] do
       assert {:error, %{kind: :validation, retryable: false}} =
-               apply(DataProtection, :request_subject_erasure, [client, @body, options])
+               DataProtection.request_subject_erasure(client, @body, options)
     end
 
     assert {:error, %{kind: :validation}} =

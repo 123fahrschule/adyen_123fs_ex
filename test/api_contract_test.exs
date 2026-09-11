@@ -123,7 +123,7 @@ defmodule Adyen123FS.APIContractTest do
           {req, Req.Response.new(status: 200, body: response)}
         end)
 
-      assert {:ok, %{body: ^response}} = apply(Checkout, :card_details, [client, body, options])
+      assert {:ok, %{body: ^response}} = Checkout.card_details(client, body, options)
     end
   end
 
@@ -166,16 +166,12 @@ defmodule Adyen123FS.APIContractTest do
       end)
 
     assert {:ok, %{status: 201, body: ^response}} =
-             apply(Checkout, :create_payment_link, [
-               client,
-               body,
-               [idempotency_key: "link-operation"]
-             ])
+             Checkout.create_payment_link(client, body, idempotency_key: "link-operation")
 
     client = TestAdapter.client(fn _ -> flunk("must not send") end)
 
     assert {:error, %{kind: :validation}} =
-             apply(Checkout, :create_payment_link, [client, body, []])
+             Checkout.create_payment_link(client, body, [])
 
     refute function_exported?(Checkout, :create_payment_link, 2)
   end
@@ -200,7 +196,7 @@ defmodule Adyen123FS.APIContractTest do
       end)
 
     assert {:error, %{kind: :transport, retryable: false}} =
-             apply(Checkout, :expire_payment_link, [client, "LINK123"])
+             Checkout.expire_payment_link(client, "LINK123")
   end
 
   defp invoke(client, function, :body, body),
