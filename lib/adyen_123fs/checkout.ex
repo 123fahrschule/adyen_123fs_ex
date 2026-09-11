@@ -243,8 +243,7 @@ defmodule Adyen123FS.Checkout do
   end
 
   defp modify(client, psp_reference, suffix, body, required, options) do
-    with :ok <- Client.ensure_service(client, :checkout),
-         :ok <- identifier(psp_reference) do
+    with :ok <- identifier(psp_reference) do
       post(client, "/payments/#{psp_reference}/#{suffix}", body, required, options)
     end
   end
