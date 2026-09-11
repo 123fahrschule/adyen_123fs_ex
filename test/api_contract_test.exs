@@ -35,7 +35,7 @@ defmodule Adyen123FS.APIContractTest do
     @specification @contract["operations"][operation]
 
     test "#{function} rejects a Data Protection client before network access" do
-      TestAdapter.client(fn _ -> flunk("wrong service must not reach Adyen") end)
+      TestAdapter.register(fn _ -> flunk("wrong service must not reach Adyen") end)
       client = Client.new(api_key: "key", service: :data_protection, adapter: TestAdapter)
       body = sample_body(@specification["required_body"])
 

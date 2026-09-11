@@ -106,7 +106,7 @@ defmodule Adyen123FS.DataProtectionTest do
   end
 
   defp client(callback) do
-    TestAdapter.client(callback)
+    TestAdapter.register(callback)
     Client.new(api_key: "key", service: :data_protection, adapter: TestAdapter)
   end
 end
