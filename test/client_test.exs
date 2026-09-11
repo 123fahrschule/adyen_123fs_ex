@@ -56,6 +56,7 @@ defmodule Adyen123FS.ClientTest do
           [service: :unknown],
           [service: nil],
           [service: "checkout"],
+          [service: :data_protection, environment: :typo],
           [service: :data_protection, live_prefix: "company"],
           [service: :data_protection, environment: :live, live_prefix: nil]
         ] do

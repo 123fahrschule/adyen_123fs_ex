@@ -25,7 +25,7 @@ defmodule Adyen123FS.Error do
         }
 
   @doc false
-  @spec with_message(t()) :: t()
+  @spec with_message(%__MODULE__{kind: :api | :protocol | :transport}) :: t()
   def with_message(%__MODULE__{} = error), do: %{error | message: summary(error)}
 
   defp summary(%{kind: :api} = error) do
@@ -40,8 +40,6 @@ defmodule Adyen123FS.Error do
   defp summary(%{kind: :transport} = error) do
     "Adyen transport error: retryable=#{error.retryable}" <> transport_diagnostic(error.reason)
   end
-
-  defp summary(%{kind: :validation, message: message}), do: message
 
   defp api_diagnostics(body) when is_map(body) do
     code = body["errorCode"]
