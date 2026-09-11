@@ -28,6 +28,12 @@ defmodule Adyen123FS.APIContractTest do
      :delete}
   ]
 
+  test "every public Checkout function has a pinned contract and service guard" do
+    listed = @operations |> Enum.map(&elem(&1, 0)) |> MapSet.new()
+    exported = Checkout.__info__(:functions) |> Enum.map(&elem(&1, 0)) |> MapSet.new()
+    assert MapSet.equal?(listed, exported)
+  end
+
   for {function, operation, kind} <- @operations do
     @function function
     @operation operation
