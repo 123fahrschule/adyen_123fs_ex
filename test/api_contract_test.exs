@@ -5,36 +5,41 @@ defmodule Adyen123FS.APIContractTest do
   @contract File.read!(Path.join(__DIR__, "fixtures/checkout_v72_contract.json"))
             |> Jason.decode!()
   @operations [
-    {:payment_methods, "POST /paymentMethods", :body_optional_key},
-    {:card_details, "POST /cardDetails", :body_optional_key},
-    {:create_payment_link, "POST /paymentLinks", :body},
-    {:get_payment_link, "GET /paymentLinks/{linkId}", :resource},
-    {:expire_payment_link, "PATCH /paymentLinks/{linkId}", :expire_link},
-    {:create_payment, "POST /payments", :body},
-    {:submit_details, "POST /payments/details", :body},
-    {:create_session, "POST /sessions", :body},
-    {:get_session, "GET /sessions/{sessionId}", :session_result},
-    {:update_session, "PATCH /sessions/{sessionId}", :update_session},
-    {:apple_pay_session, "POST /applePay/sessions", :body},
-    {:cancel_by_reference, "POST /cancels", :body},
-    {:capture, "POST /payments/{paymentPspReference}/captures", :modification},
-    {:refund, "POST /payments/{paymentPspReference}/refunds", :modification},
-    {:cancel, "POST /payments/{paymentPspReference}/cancels", :modification},
-    {:reverse, "POST /payments/{paymentPspReference}/reversals", :modification},
-    {:update_amount, "POST /payments/{paymentPspReference}/amountUpdates", :modification},
-    {:list_stored_payment_methods, "GET /storedPaymentMethods", :query},
-    {:store_payment_method, "POST /storedPaymentMethods", :body},
+    {:payment_methods, "POST /paymentMethods", :body_optional_key, [2, 3]},
+    {:card_details, "POST /cardDetails", :body_optional_key, [2, 3]},
+    {:create_payment_link, "POST /paymentLinks", :body, [3]},
+    {:get_payment_link, "GET /paymentLinks/{linkId}", :resource, [2]},
+    {:expire_payment_link, "PATCH /paymentLinks/{linkId}", :expire_link, [2]},
+    {:create_payment, "POST /payments", :body, [3]},
+    {:submit_details, "POST /payments/details", :body, [3]},
+    {:create_session, "POST /sessions", :body, [3]},
+    {:get_session, "GET /sessions/{sessionId}", :session_result, [3]},
+    {:update_session, "PATCH /sessions/{sessionId}", :update_session, [3]},
+    {:apple_pay_session, "POST /applePay/sessions", :body, [3]},
+    {:cancel_by_reference, "POST /cancels", :body, [3]},
+    {:capture, "POST /payments/{paymentPspReference}/captures", :modification, [4]},
+    {:refund, "POST /payments/{paymentPspReference}/refunds", :modification, [4]},
+    {:cancel, "POST /payments/{paymentPspReference}/cancels", :modification, [4]},
+    {:reverse, "POST /payments/{paymentPspReference}/reversals", :modification, [4]},
+    {:update_amount, "POST /payments/{paymentPspReference}/amountUpdates", :modification, [4]},
+    {:list_stored_payment_methods, "GET /storedPaymentMethods", :query, [2]},
+    {:store_payment_method, "POST /storedPaymentMethods", :body, [3]},
     {:delete_stored_payment_method, "DELETE /storedPaymentMethods/{storedPaymentMethodId}",
-     :delete}
+     :delete, [3]}
   ]
 
-  test "every public Checkout function has a pinned contract and service guard" do
-    listed = @operations |> Enum.map(&elem(&1, 0)) |> MapSet.new()
-    exported = Checkout.__info__(:functions) |> Enum.map(&elem(&1, 0)) |> MapSet.new()
+  test "every public Checkout function and arity has a pinned contract and service guard" do
+    listed =
+      for {function, _operation, _kind, arities} <- @operations,
+          arity <- arities,
+          into: MapSet.new(),
+          do: {function, arity}
+
+    exported = Checkout.__info__(:functions) |> MapSet.new()
     assert MapSet.equal?(listed, exported)
   end
 
-  for {function, operation, kind} <- @operations do
+  for {function, operation, kind, _arities} <- @operations do
     @function function
     @operation operation
     @kind kind
