@@ -91,7 +91,7 @@ defmodule Adyen123FS.DataProtectionTest do
     end
   end
 
-  test "a caller cannot opt erasure into Checkout idempotency or bypass query validation" do
+  test "a caller cannot opt erasure into Checkout idempotency or automatic retries" do
     client = client(fn _ -> flunk("must not send") end)
 
     for options <- [[idempotency_key: "unsupported"], [query: %{"extra" => %{}}], [retry: true]] do
@@ -103,6 +103,15 @@ defmodule Adyen123FS.DataProtectionTest do
              Client.request(client, :post, "/requestSubjectErasure", @body,
                idempotency_key: "unsupported"
              )
+  end
+
+  test "erasure rejects unsupported query parameters and malformed options before sending" do
+    client = client(fn _ -> flunk("unsupported options must not reach Adyen") end)
+
+    for options <- [[query: %{"a" => "b"}], [query: %{}], [query: nil], nil, %{}, [:query]] do
+      assert {:error, %{kind: :validation, retryable: false}} =
+               DataProtection.request_subject_erasure(client, @body, options)
+    end
   end
 
   defp client(callback) do

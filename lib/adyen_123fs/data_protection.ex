@@ -25,13 +25,15 @@ defmodule Adyen123FS.DataProtection do
   There is no declared idempotency-key support: the option is rejected and no
   error is marked automatically retryable. An intentional manual repeat for the
   identical payment can return ALREADY_PROCESSED. Do not automatically retry an
-  uncertain result or silently add forceErasure. The only transport option is
-  `:query`, validated as scalar query parameters by the client.
+  uncertain result or silently add forceErasure. This operation has no declared
+  query parameters or supported request options. Omit the options argument or
+  pass `[]`; any other value returns a validation error before network access.
   """
   @spec request_subject_erasure(Client.t(), map(), keyword()) :: Client.result()
   def request_subject_erasure(client, body, options \\ []) do
     with :ok <- Client.ensure_service(client, :data_protection),
-         :ok <- validate(body) do
+         :ok <- validate(body),
+         :ok <- validate_options(options) do
       Client.request(client, :post, "/requestSubjectErasure", body, options)
     end
   end
@@ -50,5 +52,8 @@ defmodule Adyen123FS.DataProtection do
   end
 
   defp validate(_), do: invalid("body must be a map")
+  defp validate_options([]), do: :ok
+  defp validate_options(_), do: invalid("request_subject_erasure does not accept options")
+
   defp invalid(message), do: {:error, %Error{kind: :validation, message: message}}
 end

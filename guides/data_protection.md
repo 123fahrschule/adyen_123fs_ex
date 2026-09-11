@@ -29,6 +29,12 @@ original payment authorisation: one request targets that payment's shopper data,
 not every payment associated with a shopper. Account and payment selection must
 come from your verified internal records.
 
+`request_subject_erasure` accepts no request options: omit its third argument
+or pass `[]`. Query parameters (including an empty `query` map), idempotency keys
+and retry options are rejected locally with `{:error, %Adyen123FS.Error{kind:
+:validation}}` before network access. The pinned operation declares no query
+parameters. Optional API fields such as `forceErasure` belong in the body.
+
 ## Inspect the result, including after HTTP 200
 
 | result | Meaning and application handling |
