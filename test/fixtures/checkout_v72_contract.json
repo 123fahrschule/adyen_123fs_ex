@@ -1,0 +1,134 @@
+{
+  "source": "https://raw.githubusercontent.com/Adyen/adyen-openapi/f82d1fe674e536cc2c6b0d7946e0e827873a4fbf/json/CheckoutService-v72.json",
+  "sha256": "f4081494707eb5ff6486397b366079b5375fcedb666bbe1604fe91bc01a4affb",
+  "revision": "f82d1fe674e536cc2c6b0d7946e0e827873a4fbf",
+  "checked_at": "2026-09-10",
+  "operations": {
+    "POST /paymentLinks": {
+      "required_body": {"amount": "object", "merchantAccount": "string", "reference": "string"},
+      "required_query": []
+    },
+    "GET /paymentLinks/{linkId}": {"required_body": {}, "required_query": []},
+    "PATCH /paymentLinks/{linkId}": {
+      "required_body": {"status": "string"},
+      "required_query": [],
+      "body_enums": {"status": ["expired"]}
+    },
+    "POST /cardDetails": {
+      "required_body": {"merchantAccount": "string"},
+      "required_query": []
+    },
+    "POST /payments": {
+      "required_body": {
+        "amount": "object",
+        "merchantAccount": "string",
+        "paymentMethod": "object",
+        "reference": "string",
+        "returnUrl": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/details": {
+      "required_body": {
+        "details": "object"
+      },
+      "required_query": []
+    },
+    "POST /paymentMethods": {
+      "required_body": {
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "POST /sessions": {
+      "required_body": {
+        "amount": "object",
+        "merchantAccount": "string",
+        "reference": "string",
+        "returnUrl": "string"
+      },
+      "required_query": []
+    },
+    "GET /sessions/{sessionId}": {
+      "required_body": {},
+      "required_query": [
+        "sessionResult"
+      ]
+    },
+    "PATCH /sessions/{sessionId}": {
+      "required_body": {
+        "amount": "object",
+        "sessionData": "string"
+      },
+      "required_query": []
+    },
+    "POST /cancels": {
+      "required_body": {
+        "merchantAccount": "string",
+        "paymentReference": "string"
+      },
+      "required_query": []
+    },
+    "POST /applePay/sessions": {
+      "required_body": {
+        "displayName": "string",
+        "domainName": "string",
+        "merchantIdentifier": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/{paymentPspReference}/captures": {
+      "required_body": {
+        "amount": "object",
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/{paymentPspReference}/refunds": {
+      "required_body": {
+        "amount": "object",
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/{paymentPspReference}/cancels": {
+      "required_body": {
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/{paymentPspReference}/reversals": {
+      "required_body": {
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "POST /payments/{paymentPspReference}/amountUpdates": {
+      "required_body": {
+        "amount": "object",
+        "merchantAccount": "string"
+      },
+      "required_query": []
+    },
+    "GET /storedPaymentMethods": {
+      "required_body": {},
+      "required_query": []
+    },
+    "POST /storedPaymentMethods": {
+      "required_body": {
+        "merchantAccount": "string",
+        "paymentMethod": "object",
+        "recurringProcessingModel": "string",
+        "shopperReference": "string"
+      },
+      "required_query": []
+    },
+    "DELETE /storedPaymentMethods/{storedPaymentMethodId}": {
+      "required_body": {},
+      "required_query": [
+        "shopperReference",
+        "merchantAccount"
+      ]
+    }
+  }
+}

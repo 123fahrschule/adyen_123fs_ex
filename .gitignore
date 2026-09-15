@@ -1,0 +1,9 @@
+/_build/
+/deps/
+/doc/
+/cover/
+/.elixir_ls/
+/.env
+/erl_crash.dump
+/integration/without_plug/_build/
+/integration/without_plug/deps/
